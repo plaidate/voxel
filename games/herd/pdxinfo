@@ -1,0 +1,6 @@
+name=Herd
+author=sdwfrost
+description=Dig, blast and drain a path. Get the flock home.
+bundleID=com.sdwfrost.voxel.herd
+version=1.0
+buildNumber=1

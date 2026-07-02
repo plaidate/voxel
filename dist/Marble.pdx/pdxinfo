@@ -1,0 +1,8 @@
+name=Marble
+author=sdwfrost
+description=Roll downhill. Dodge the goo. Beat the clock.
+bundleID=com.sdwfrost.voxel.marble
+version=1.0
+buildNumber=1
+pdxversion=20300
+buildtime=836266646

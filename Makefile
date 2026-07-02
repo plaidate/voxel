@@ -8,7 +8,7 @@
 # A build stages core/* + games/<g>/* into build/<g>/source (pdc wants one
 # source root), writes smokeflag.lua, then runs pdc.
 
-GAMES :=
+GAMES := rubble crumble lob bulwark herd excavate marble summit vault
 
 OUT := out
 

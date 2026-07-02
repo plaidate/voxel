@@ -1,0 +1,6 @@
+name=Vault
+author=sdwfrost
+description=A dungeon of voxels. Every wall is a door if you have a bomb.
+bundleID=com.sdwfrost.voxel.vault
+version=1.0
+buildNumber=1

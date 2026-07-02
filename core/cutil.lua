@@ -12,6 +12,10 @@ function Util.after(delay, fn)
     pending[#pending + 1] = { t = delay, fn = fn }
 end
 
+function Util.clearPending()
+    pending = {}
+end
+
 function Util.runPending(dt)
     for i = #pending, 1, -1 do
         local p = pending[i]

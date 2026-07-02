@@ -45,7 +45,9 @@ function Harness.frame(frame, updateFn)
         end
         playdate.datastore.write(t, "smoke")
     end
-    if Harness.shotPath and frame % 300 == 0 and playdate.simulator then
-        playdate.simulator.writeToFile(playdate.graphics.getDisplayImage(), Harness.shotPath)
+    if Harness.shotPath and playdate.simulator and (frame == 20 or frame % 300 == 0) then
+        local img = playdate.graphics.getDisplayImage()
+        playdate.simulator.writeToFile(img, Harness.shotPath)
+        playdate.simulator.writeToFile(img, (Harness.shotPath:gsub("%.png$", "-" .. frame .. ".png")))
     end
 end
