@@ -67,7 +67,7 @@ function Draw.frame()
     if State.mode == "title" then
         Kit.title("VAULT", {
             "find the idol - five rooms down",
-            "d-pad move / crank aim / Ⓐ sword / Ⓑ bomb",
+            "d-pad move / crank aim / Ⓐ sword+leap / Ⓑ bomb",
             "keys open doors; bombs open anything",
             "press Ⓐ to start" ..
                 (playdate.datastore.read("save") and "  /  Ⓑ continue" or ""),

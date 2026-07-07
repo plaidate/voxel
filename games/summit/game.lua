@@ -251,7 +251,7 @@ function Game.update(dt)
         local mx = (dx > 0.5 and 1) or (dx < -0.5 and -1) or 0
         local my = (dy > 0.5 and 1) or (dy < -0.5 and -1) or 0
         moveActor(b, mx, my, sp, dt)
-        if d < 2.6 and b.cd <= 0 and math.abs(b.z - p.z) < 2 then
+        if d > 0.01 and d < 2.6 and b.cd <= 0 and math.abs(b.z - p.z) < 2 then
             b.cd = Config.BRUTE_CD
             p.kbx = p.kbx + dx / d * Config.BRUTE_KB
             p.kby = p.kby + dy / d * Config.BRUTE_KB

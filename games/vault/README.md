@@ -12,7 +12,7 @@ it from the title screen.
 
 - **d-pad** — move
 - **crank** — aim the sword (docked: follows movement)
-- **A** — swing (kills grubs, smashes pots)
+- **A** — swing (kills grubs, smashes pots) and leap onto jumpable parapets
 - **B** — drop a bomb (careful: it hurts you too)
 - **B on the title screen** — continue a saved run
 

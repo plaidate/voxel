@@ -1,8 +1,10 @@
 -- Vault: input. D-pad moves, crank aims the sword (docked: follows
--- movement), A swings, B drops a bomb.
+-- movement), A swings and leaps, B drops a bomb. Jump shares the sword
+-- button because it is the only action safe to co-trigger -- a bomb sharing
+-- a button would hurt the player, so it keeps B to itself.
 
 Input = {
-    state = { mx = 0, my = 0, aim = nil, swing = false, bomb = false, confirm = false },
+    state = { mx = 0, my = 0, aim = nil, swing = false, bomb = false, jump = false, confirm = false },
 }
 
 local apFrame = 0
@@ -22,6 +24,7 @@ function Input.poll()
     if pd.buttonIsPressed(pd.kButtonUp) then s.my = -1 end
     if pd.buttonIsPressed(pd.kButtonDown) then s.my = 1 end
     s.swing = pd.buttonJustPressed(pd.kButtonA)
+    s.jump = s.swing -- A leaps too; bomb can't share a button (self-damage)
     s.bomb = pd.buttonJustPressed(pd.kButtonB)
     s.confirm = pd.buttonJustPressed(pd.kButtonA)
     if not pd.isCrankDocked() then
