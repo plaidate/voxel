@@ -7,30 +7,12 @@ local gfx = playdate.graphics
 
 Draw = {}
 
-local titleImg, deadImg
-local function bigText(text)
-    local w, h = gfx.getTextSize(text)
-    local img = gfx.image.new(w, h)
-    gfx.pushContext(img)
-    gfx.drawText(text, 0, 0)
-    gfx.popContext()
-    return img
-end
-
-local function drawShadow(x, y, hw)
-    local g = Vox.heightAt(math.floor(x), math.floor(y))
-    gfx.setPattern(Vox.PAT[1])
-    local sx = math.floor(Vox.OX + (x - hw) * Vox.S + 0.5)
-    local sy = math.floor(Vox.OY + y * Vox.TY - g * Vox.TZ + 0.5)
-    gfx.fillRect(sx, sy, math.floor(hw * 2 * Vox.S + 0.5), Vox.TY)
-end
-
 local function drawPlayer()
     local p = Game.player
     if p.inv > 0 and math.floor(p.inv * 15) % 2 == 0 then
         return -- hit blink
     end
-    drawShadow(p.x, p.y, 1.2)
+    Kit.shadow(p.x, p.y, 1.2)
     VoxModel.draw(Game.playerModel, p.x, p.y, p.z)
     -- gun barrel voxel in the aim direction
     local ca, sa = math.cos(p.aim), math.sin(p.aim)
@@ -39,7 +21,7 @@ local function drawPlayer()
 end
 
 local function drawEnemy(e)
-    drawShadow(e.x, e.y, 1)
+    Kit.shadow(e.x, e.y, 1)
     VoxModel.draw(Game.grubModel, e.x, e.y, e.z)
     Vox.occlude(e.x - 1.5, e.x + 1.5, e.y, e.z, e.z + 2)
 end
@@ -47,11 +29,6 @@ end
 local function drawShot(s)
     Vox.drawBlock(s.x - 0.5, s.y, s.z, 4)
     Vox.occlude(s.x - 1, s.x + 1, s.y, s.z, s.z + 1)
-end
-
-local function drawPart(q)
-    Vox.drawBlock(q.x - 0.5, q.y, q.z, q.m)
-    Vox.occlude(q.x - 1, q.x + 1, q.y, q.z, q.z + 1)
 end
 
 local function drawScene()
@@ -68,13 +45,9 @@ local function drawScene()
         list[#list + 1] = { y = s.y, fn = drawShot, arg = s }
     end
     for _, q in ipairs(Game.parts) do
-        list[#list + 1] = { y = q.y, fn = drawPart, arg = q }
+        list[#list + 1] = { y = q.y, fn = Kit.drawPart, arg = q }
     end
-    table.sort(list, function(a, b) return a.y < b.y end)
-    for i = 1, #list do
-        local d = list[i]
-        d.fn(d.arg)
-    end
+    Kit.drawSorted(list)
 end
 
 local function drawReticle()
@@ -88,30 +61,12 @@ local function drawReticle()
     end
 end
 
-local function panel(x, y, w, h)
-    gfx.setColor(gfx.kColorBlack)
-    gfx.fillRect(x, y, w, h)
-    gfx.setColor(gfx.kColorWhite)
-    gfx.drawRect(x, y, w, h)
-end
-
-local function whiteText(text, x, y)
-    gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-    gfx.drawText(text, x, y)
-    gfx.setImageDrawMode(gfx.kDrawModeCopy)
-end
-
-local function whiteTextCentered(text, y)
-    local w = gfx.getTextSize(text)
-    whiteText(text, math.floor((400 - w) / 2), y)
-end
-
 local function drawHud()
     local pp = Game.player
     if pp then Kit.marker(pp.x, pp.y, pp.z + 4, State.t or 0) end
     drawReticle()
-    whiteText("SCORE " .. State.score, 8, 3)
-    whiteText("WAVE " .. State.wave, 176, 3)
+    Kit.text("SCORE " .. State.score, 8, 3)
+    Kit.text("WAVE " .. State.wave, 176, 3)
     gfx.setColor(gfx.kColorWhite)
     for i = 1, Config.MAX_HP do
         local x = 400 - 14 * i
@@ -121,32 +76,24 @@ local function drawHud()
             gfx.drawRect(x, 5, 9, 9)
         end
     end
-    if playdate.isCrankDocked and playdate.isCrankDocked() and not Harness.enabled then
-        whiteText("crank to aim", 154, 224)
+    if playdate.isCrankDocked() and not Harness.enabled then
+        Kit.text("crank to aim", 154, 224)
     end
 end
 
 local function drawTitle()
-    titleImg = titleImg or bigText("RUBBLE")
-    panel(50, 48, 300, 130)
-    gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-    local w = titleImg.width * 3
-    titleImg:drawScaled(math.floor((400 - w) / 2), 56, 3)
-    gfx.setImageDrawMode(gfx.kDrawModeCopy)
-    whiteTextCentered("waves of grubs - carve the arena", 118)
-    whiteTextCentered("d-pad move / crank aim / Ⓑ jump", 136)
-    whiteTextCentered("press Ⓐ to start", 156)
+    Kit.panel(50, 48, 300, 130)
+    Kit.bigCentered("RUBBLE", 56, 3)
+    Kit.centered("waves of grubs - carve the arena", 118)
+    Kit.centered("d-pad move / crank aim / Ⓑ jump", 136)
+    Kit.centered("press Ⓐ to start", 156)
 end
 
 local function drawDead()
-    deadImg = deadImg or bigText("WRECKED")
-    panel(78, 70, 244, 86)
-    gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-    local w = deadImg.width * 2
-    deadImg:drawScaled(math.floor((400 - w) / 2), 80, 2)
-    gfx.setImageDrawMode(gfx.kDrawModeCopy)
-    whiteTextCentered("score " .. State.score .. " / wave " .. State.wave, 116)
-    whiteTextCentered("Ⓐ again", 134)
+    Kit.panel(78, 70, 244, 86)
+    Kit.bigCentered("WRECKED", 80, 2)
+    Kit.centered("score " .. State.score .. " / wave " .. State.wave, 116)
+    Kit.centered("Ⓐ again", 134)
 end
 
 function Draw.frame()
@@ -155,7 +102,7 @@ function Draw.frame()
         drawTitle()
     elseif State.mode == "dead" then
         drawDead()
-        whiteText("SCORE " .. State.score, 8, 3)
+        Kit.text("SCORE " .. State.score, 8, 3)
     else
         drawHud()
     end

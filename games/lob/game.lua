@@ -243,7 +243,7 @@ end
 
 local function endResolve()
     if Game.you.hp <= 0 or Game.foe.hp <= 0 then
-        local youWon = Game.foe.hp <= 0 -- mutual kill goes to the shooter's favor
+        local youWon = Game.foe.hp <= 0 -- mutual kill goes to the player
         if youWon then
             State.youWins = State.youWins + 1
             Harness.count("roundwins")

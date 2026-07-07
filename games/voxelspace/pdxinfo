@@ -1,0 +1,6 @@
+name=Voxelspace
+author=sdwfrost
+description=Comanche-style heightmap flyover. Crank steers, d-pad climbs.
+bundleID=com.sdwfrost.voxel.voxelspace
+version=1.0
+buildNumber=1

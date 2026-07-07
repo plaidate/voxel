@@ -186,7 +186,6 @@ function Game.update(dt)
     if Harness.enabled then autoplay(dt, inp) end
     local b = Game.ball
     b.charge = math.min(1, b.charge + (inp.charge or 0))
-    local g = hAt(b.x, b.y)
     if b.grounded then
         local gx = (hAt(b.x + 1, b.y) - hAt(b.x - 1, b.y)) / 2
         local gy = (hAt(b.x, b.y + 1) - hAt(b.x, b.y - 1)) / 2
@@ -228,7 +227,7 @@ function Game.update(dt)
         b.y = Util.clamp(ny, 1, Vox.D - 2)
     end
     -- vertical: follow ground, catch air off crests
-    g = hAt(b.x, b.y)
+    local g = hAt(b.x, b.y)
     if b.grounded then
         if g < b.z - 1.2 then
             b.grounded = false
@@ -246,7 +245,6 @@ function Game.update(dt)
             b.grounded = true
         end
     end
-    if State.mode ~= "play" then return end
     if b.grounded then
         local m = surfAt(b.x, b.y)
         if m == GOO then

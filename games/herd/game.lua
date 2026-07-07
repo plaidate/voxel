@@ -198,23 +198,6 @@ local function updateSheep(dt)
     end
 end
 
-local function updateParts(dt)
-    for i = #Game.parts, 1, -1 do
-        local q = Game.parts[i]
-        q.t = q.t - dt
-        q.vz = q.vz - Config.GRAVITY * dt
-        q.x = q.x + q.vx * dt
-        q.y = q.y + q.vy * dt
-        q.z = q.z + q.vz * dt
-        local g = Vox.heightAt(math.floor(q.x), math.floor(q.y))
-        if q.z < g then
-            q.z = g
-            q.vz = -q.vz * 0.4
-        end
-        if q.t <= 0 then table.remove(Game.parts, i) end
-    end
-end
-
 function Game.dig(x, y)
     local z = Vox.heightAt(x, y) - 1
     local removed = Vox.carve(x, y, z, Config.DIG_R)
@@ -299,11 +282,11 @@ function Game.update(dt)
     end
     if State.mode == "over" then
         State.phaseT = math.max(0, State.phaseT - dt)
-        updateParts(dt)
+        Kit.updateParts(Game.parts, dt)
         if State.phaseT <= 0 and inp.confirm then Game.startGame() end
         return
     end
-    updateParts(dt)
+    Kit.updateParts(Game.parts, dt)
     if State.phase == "banner" then
         State.phaseT = State.phaseT - dt
         if State.phaseT <= 0 then State.phase = "run" end

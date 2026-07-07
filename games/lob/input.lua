@@ -7,7 +7,7 @@
 Input = {
     state = {
         aim = nil, rotL = false, rotR = false,
-        chargeStart = false, charging = false, fire = false,
+        chargeStart = false, fire = false,
         confirm = false,
     },
 }
@@ -19,7 +19,7 @@ function Input.poll()
     if Harness.enabled then
         apFrame = apFrame + 1
         s.aim, s.rotL, s.rotR = nil, false, false
-        s.chargeStart, s.charging, s.fire = false, false, false
+        s.chargeStart, s.fire = false, false
         s.confirm = State.mode ~= "play" and apFrame % 30 == 0
         return
     end
@@ -32,7 +32,6 @@ function Input.poll()
     s.rotL = pd.buttonIsPressed(pd.kButtonLeft)
     s.rotR = pd.buttonIsPressed(pd.kButtonRight)
     s.chargeStart = pd.buttonJustPressed(pd.kButtonA)
-    s.charging = pd.buttonIsPressed(pd.kButtonA)
     s.fire = pd.buttonJustReleased(pd.kButtonA)
     s.confirm = pd.buttonJustPressed(pd.kButtonA)
 end

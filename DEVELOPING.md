@@ -101,6 +101,7 @@ rate, never per-frame.
 | marble | heightfield gradient physics, bounce/air, pads |
 | summit | knockback sumo, terrace maps, timed erosion |
 | vault | rooms-as-data, transitions, datastore save/continue, items |
+| voxelspace | non-Vox heightmap renderer (VoxelSpace/Comanche), value-noise terrain |
 
 Roadmap and per-idea engine notes: `IDEAS.md`. Everything here was
 verified with `tools/smoke.sh` autopilot runs; keep that bar.

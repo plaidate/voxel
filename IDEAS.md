@@ -60,3 +60,12 @@ terrain, height physics, crank). Status: ☐ idea · ◐ in progress · ● ship
   from title). Rooms are data (games/vault/rooms.lua). Design twist:
   no scripted secret walls — the whole dungeon is carvable, so scarce
   bombs turn any wall into a door.
+
+## Demos
+
+- ● **Voxelspace** — not a Vox-engine game: the classic VoxelSpace
+  (Comanche) heightmap renderer as a 1-bit tech demo. Wrapping 256x256
+  value-noise terrain (smoothed, 2 world units per cell), per-column ray
+  march with early exit, precomputed depth ladders, run-merged fills,
+  17-level Bayer shades + distance haze. Crank steers, d-pad climbs,
+  A boosts, B rerolls the map. ~5ms/frame at 50fps.

@@ -6,6 +6,18 @@ sharing one thin engine. Sister project to [`phosphor`](../phosphor/)
 Voxel is the home for Voxatron-style rooms — a solid 3D grid in a 3/4
 projection, dither-shaded, and fully destructible.
 
+**New player?** [MANUAL.md](MANUAL.md) is the player's manual — one
+section per game with controls, mechanics and tips.
+**Building on the engine?** [DEVGUIDE.md](DEVGUIDE.md) covers the
+architecture and how to add a game.
+
+## Play it
+
+Prebuilt games live in [`dist/`](dist/) (one `.pdx` per game) and as
+zips on the GitHub Releases page. Sideload a `.pdx` at
+<https://play.date/account/sideload/> or open it in the Playdate
+Simulator — no toolchain needed.
+
 ## Games
 
 | Game | One-liner |
@@ -19,9 +31,7 @@ projection, dither-shaded, and fully destructible.
 | [Marble](games/marble/) | Marble Madness on a heightfield: gradient physics, airborne crests, goo pools, and a crank-wound boost against the clock |
 | [Summit](games/summit/) | Sumo on a crumbling ziggurat: shove brutes off the terraces into the goo sea; the crank winds a radial spin attack |
 | [Vault](games/vault/) | The flagship dungeon crawl: five data-defined rooms, keys, pots, grubs, a saved run — and every wall is a door if you have a bomb |
-
-Release builds live in `dist/` — sideload the `.pdx` onto a Playdate or
-open it in the Simulator.
+| [Voxelspace](games/voxelspace/) | Tech demo: the Comanche VoxelSpace terrain renderer in 1-bit — endless crank-steered flight over procedural mountains, lakes and haze |
 
 ## The engine
 

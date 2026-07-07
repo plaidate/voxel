@@ -6,27 +6,8 @@ local gfx = playdate.graphics
 
 Draw = {}
 
-local titleImg
-local overImgs = {}
-local function bigText(text)
-    local w, h = gfx.getTextSize(text)
-    local img = gfx.image.new(w, h)
-    gfx.pushContext(img)
-    gfx.drawText(text, 0, 0)
-    gfx.popContext()
-    return img
-end
-
-local function drawShadow(x, y, hw)
-    local g = Vox.heightAt(math.floor(x), math.floor(y))
-    gfx.setPattern(Vox.PAT[1])
-    local sx = math.floor(Vox.OX + (x - hw) * Vox.S + 0.5)
-    local sy = math.floor(Vox.OY + y * Vox.TY - g * Vox.TZ + 0.5)
-    gfx.fillRect(sx, sy, math.floor(hw * 2 * Vox.S + 0.5), Vox.TY)
-end
-
 local function drawCat(c)
-    drawShadow(c.x, c.y, 1.4)
+    Kit.shadow(c.x, c.y, 1.4)
     VoxModel.draw(Game.catModel, c.x, c.y, c.z)
     Vox.occlude(c.x - 2, c.x + 2, c.y, c.z, c.z + 3)
 end
@@ -34,11 +15,6 @@ end
 local function drawShell(s)
     Vox.drawBlock(s.x - 0.5, s.y, s.z, 4)
     Vox.occlude(s.x - 1, s.x + 1, s.y, s.z, s.z + 1)
-end
-
-local function drawPart(q)
-    Vox.drawBlock(q.x - 0.5, q.y, q.z, q.m)
-    Vox.occlude(q.x - 1, q.x + 1, q.y, q.z, q.z + 1)
 end
 
 local function drawCannon()
@@ -57,34 +33,12 @@ local function drawScene()
         list[#list + 1] = { y = s.y, fn = drawShell, arg = s }
     end
     for _, q in ipairs(Game.parts) do
-        list[#list + 1] = { y = q.y, fn = drawPart, arg = q }
+        list[#list + 1] = { y = q.y, fn = Kit.drawPart, arg = q }
     end
     if Game.cannon then
         list[#list + 1] = { y = Game.cannon.y, fn = drawCannon }
     end
-    table.sort(list, function(a, b) return a.y < b.y end)
-    for i = 1, #list do
-        local d = list[i]
-        d.fn(d.arg)
-    end
-end
-
-local function panel(x, y, w, h)
-    gfx.setColor(gfx.kColorBlack)
-    gfx.fillRect(x, y, w, h)
-    gfx.setColor(gfx.kColorWhite)
-    gfx.drawRect(x, y, w, h)
-end
-
-local function whiteText(text, x, y)
-    gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-    gfx.drawText(text, x, y)
-    gfx.setImageDrawMode(gfx.kDrawModeCopy)
-end
-
-local function whiteTextCentered(text, y)
-    local w = gfx.getTextSize(text)
-    whiteText(text, math.floor((400 - w) / 2), y)
+    Kit.drawSorted(list)
 end
 
 local function drawGhost()
@@ -114,8 +68,8 @@ local function drawReticle()
 end
 
 local function drawHud()
-    whiteText("SCORE " .. State.score, 8, 3)
-    whiteText("ROUND " .. math.min(State.round + (State.phase == "siege" and 0 or 1), Config.ROUNDS)
+    Kit.text("SCORE " .. State.score, 8, 3)
+    Kit.text("ROUND " .. math.min(State.round + (State.phase == "siege" and 0 or 1), Config.ROUNDS)
         .. "/" .. Config.ROUNDS, 8, 222)
     -- keep hearts (blink while freshly hit)
     if State.keepFlash <= 0 or math.floor(State.keepFlash * 15) % 2 == 0 then
@@ -130,49 +84,37 @@ local function drawHud()
         end
     end
     if State.phase == "build" then
-        whiteTextCentered("BUILD " .. math.ceil(State.phaseT) .. "s", 3)
+        Kit.centered("BUILD " .. math.ceil(State.phaseT) .. "s", 3)
         drawGhost()
-        whiteText("d-pad move / crank turn / Ⓐ place", 110, 224)
+        Kit.text("d-pad move / crank turn / Ⓐ place", 110, 224)
     elseif State.phase == "siege" then
-        whiteTextCentered("SIEGE " .. math.ceil(State.phaseT) .. "s", 3)
+        Kit.centered("SIEGE " .. math.ceil(State.phaseT) .. "s", 3)
         drawReticle()
         local can = Game.cannon
-        whiteText("power", 104, 222)
+        Kit.text("power", 104, 222)
         gfx.setColor(gfx.kColorWhite)
         gfx.drawRect(140, 226, 122, 8)
         gfx.fillRect(141, 227, math.floor(can.power * 120), 6)
     elseif State.phase == "banner" then
-        panel(120, 100, 160, 26)
-        whiteTextCentered(State.banner, 105)
+        Kit.panel(120, 100, 160, 26)
+        Kit.centered(State.banner, 105)
     end
 end
 
 local function drawTitle()
-    titleImg = titleImg or bigText("BULWARK")
-    panel(46, 42, 308, 146)
-    gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-    local w = titleImg.width * 3
-    titleImg:drawScaled(math.floor((400 - w) / 2), 50, 3)
-    gfx.setImageDrawMode(gfx.kDrawModeCopy)
-    whiteTextCentered("enclose the keep - survive the siege", 112)
-    whiteTextCentered("build: d-pad move, crank turn, Ⓐ place", 130)
-    whiteTextCentered("siege: crank aim, hold Ⓐ, release to fire", 146)
-    whiteTextCentered("press Ⓐ to start", 166)
+    Kit.panel(46, 42, 308, 146)
+    Kit.bigCentered("BULWARK", 50, 3)
+    Kit.centered("enclose the keep - survive the siege", 112)
+    Kit.centered("build: d-pad move, crank turn, Ⓐ place", 130)
+    Kit.centered("siege: crank aim, hold Ⓐ, release to fire", 146)
+    Kit.centered("press Ⓐ to start", 166)
 end
 
 local function drawOver()
-    local img = overImgs[State.reason]
-    if not img then
-        img = bigText(State.reason)
-        overImgs[State.reason] = img
-    end
-    panel(78, 70, 244, 86)
-    gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-    local w = img.width * 2
-    img:drawScaled(math.floor((400 - w) / 2), 80, 2)
-    gfx.setImageDrawMode(gfx.kDrawModeCopy)
-    whiteTextCentered("score " .. State.score, 116)
-    whiteTextCentered("Ⓐ again", 134)
+    Kit.panel(78, 70, 244, 86)
+    Kit.bigCentered(State.reason, 80, 2)
+    Kit.centered("score " .. State.score, 116)
+    Kit.centered("Ⓐ again", 134)
 end
 
 function Draw.frame()

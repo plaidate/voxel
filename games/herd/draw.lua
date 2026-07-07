@@ -5,33 +5,10 @@ local gfx = playdate.graphics
 
 Draw = {}
 
-local titleImg, overImg
-local function bigText(text)
-    local w, h = gfx.getTextSize(text)
-    local img = gfx.image.new(w, h)
-    gfx.pushContext(img)
-    gfx.drawText(text, 0, 0)
-    gfx.popContext()
-    return img
-end
-
-local function drawShadow(x, y, hw)
-    local g = Vox.heightAt(math.floor(x), math.floor(y))
-    gfx.setPattern(Vox.PAT[1])
-    local sx = math.floor(Vox.OX + (x - hw) * Vox.S + 0.5)
-    local sy = math.floor(Vox.OY + y * Vox.TY - g * Vox.TZ + 0.5)
-    gfx.fillRect(sx, sy, math.floor(hw * 2 * Vox.S + 0.5), Vox.TY)
-end
-
 local function drawSheep(c)
-    drawShadow(c.x, c.y, 1)
+    Kit.shadow(c.x, c.y, 1)
     VoxModel.draw(Game.sheepModel, c.x, c.y, c.z)
     Vox.occlude(c.x - 1.5, c.x + 1.5, c.y, c.z, c.z + 2)
-end
-
-local function drawPart(q)
-    Vox.drawBlock(q.x - 0.5, q.y, q.z, q.m)
-    Vox.occlude(q.x - 1, q.x + 1, q.y, q.z, q.z + 1)
 end
 
 local function drawScene()
@@ -41,31 +18,9 @@ local function drawScene()
         list[#list + 1] = { y = c.y, fn = drawSheep, arg = c }
     end
     for _, q in ipairs(Game.parts) do
-        list[#list + 1] = { y = q.y, fn = drawPart, arg = q }
+        list[#list + 1] = { y = q.y, fn = Kit.drawPart, arg = q }
     end
-    table.sort(list, function(a, b) return a.y < b.y end)
-    for i = 1, #list do
-        local d = list[i]
-        d.fn(d.arg)
-    end
-end
-
-local function panel(x, y, w, h)
-    gfx.setColor(gfx.kColorBlack)
-    gfx.fillRect(x, y, w, h)
-    gfx.setColor(gfx.kColorWhite)
-    gfx.drawRect(x, y, w, h)
-end
-
-local function whiteText(text, x, y)
-    gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-    gfx.drawText(text, x, y)
-    gfx.setImageDrawMode(gfx.kDrawModeCopy)
-end
-
-local function whiteTextCentered(text, y)
-    local w = gfx.getTextSize(text)
-    whiteText(text, math.floor((400 - w) / 2), y)
+    Kit.drawSorted(list)
 end
 
 local function drawCursor()
@@ -77,8 +32,8 @@ local function drawCursor()
 end
 
 local function drawHud()
-    whiteText("HOME " .. State.saved .. "/" .. State.quota .. "   LOST " .. State.dead, 8, 3)
-    whiteTextCentered("TIME " .. math.max(0, math.ceil(State.timer)) .. "s", 3)
+    Kit.text("HOME " .. State.saved .. "/" .. State.quota .. "   LOST " .. State.dead, 8, 3)
+    Kit.centered("TIME " .. math.max(0, math.ceil(State.timer)) .. "s", 3)
     -- blast charges
     gfx.setColor(gfx.kColorWhite)
     for i = 1, Config.BLASTS do
@@ -89,9 +44,9 @@ local function drawHud()
             gfx.drawRect(x, 5, 8, 8)
         end
     end
-    whiteText("LEVEL " .. State.level .. "  SCORE " .. State.score, 8, 222)
+    Kit.text("LEVEL " .. State.level .. "  SCORE " .. State.score, 8, 222)
     -- release-rate dial
-    whiteText("rate", 220, 222)
+    Kit.text("rate", 220, 222)
     gfx.setColor(gfx.kColorWhite)
     gfx.drawRect(256, 226, 102, 8)
     local f = (State.rate - Config.RATE_MIN) / (Config.RATE_MAX - Config.RATE_MIN)
@@ -100,33 +55,19 @@ local function drawHud()
         drawCursor()
     end
     if State.phase == "banner" then
-        panel(110, 100, 180, 26)
-        whiteTextCentered(State.banner, 105)
+        Kit.panel(110, 100, 180, 26)
+        Kit.centered(State.banner, 105)
     end
 end
 
+-- custom title layout (predates Kit.title's spacing; kept pixel-identical)
 local function drawTitle()
-    titleImg = titleImg or bigText("HERD")
-    panel(46, 42, 308, 146)
-    gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-    local w = titleImg.width * 3
-    titleImg:drawScaled(math.floor((400 - w) / 2), 50, 3)
-    gfx.setImageDrawMode(gfx.kDrawModeCopy)
-    whiteTextCentered("dig and blast a path - get the flock home", 112)
-    whiteTextCentered("d-pad cursor / Ⓐ dig / Ⓑ blast", 130)
-    whiteTextCentered("crank sets the release rate", 146)
-    whiteTextCentered("press Ⓐ to start", 166)
-end
-
-local function drawOver()
-    overImg = overImg or bigText("FLOCK LOST")
-    panel(78, 70, 244, 86)
-    gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-    local w = overImg.width * 2
-    overImg:drawScaled(math.floor((400 - w) / 2), 80, 2)
-    gfx.setImageDrawMode(gfx.kDrawModeCopy)
-    whiteTextCentered("level " .. State.level .. " / score " .. State.score, 116)
-    whiteTextCentered("Ⓐ again", 134)
+    Kit.panel(46, 42, 308, 146)
+    Kit.bigCentered("HERD", 50, 3)
+    Kit.centered("dig and blast a path - get the flock home", 112)
+    Kit.centered("d-pad cursor / Ⓐ dig / Ⓑ blast", 130)
+    Kit.centered("crank sets the release rate", 146)
+    Kit.centered("press Ⓐ to start", 166)
 end
 
 function Draw.frame()
@@ -134,7 +75,10 @@ function Draw.frame()
     if State.mode == "title" then
         drawTitle()
     elseif State.mode == "over" then
-        drawOver()
+        Kit.over("FLOCK LOST", {
+            "level " .. State.level .. " / score " .. State.score,
+            "Ⓐ again",
+        })
     else
         drawHud()
     end

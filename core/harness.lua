@@ -26,7 +26,7 @@ function Harness.set(key, val)
     Harness.counters[key] = val
 end
 
--- wraps the real per-frame update; called by Attract
+-- wraps the real per-frame update; called from each game's playdate.update
 function Harness.frame(frame, updateFn)
     if not Harness.enabled then
         updateFn()
