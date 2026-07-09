@@ -2,5 +2,5 @@ name=Summit
 author=sdwfrost
 description=Sumo on a crumbling ziggurat.
 bundleID=com.sdwfrost.voxel.summit
-version=1.0
+version=0.1
 buildNumber=1

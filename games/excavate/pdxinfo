@@ -2,5 +2,5 @@ name=Excavate
 author=sdwfrost
 description=Dig for fossils. Mind the roof.
 bundleID=com.sdwfrost.voxel.excavate
-version=1.0
+version=0.1
 buildNumber=1

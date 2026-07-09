@@ -2,5 +2,5 @@ name=Crumble
 author=sdwfrost
 description=Climb the crumbling columns. Outlast the rising slime.
 bundleID=com.sdwfrost.voxel.crumble
-version=1.0
+version=0.1
 buildNumber=1

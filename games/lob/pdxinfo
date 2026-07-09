@@ -2,5 +2,5 @@ name=Lob
 author=sdwfrost
 description=Artillery duel in a crumbling voxel room.
 bundleID=com.sdwfrost.voxel.lob
-version=1.0
+version=0.1
 buildNumber=1
