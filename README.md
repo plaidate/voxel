@@ -87,5 +87,5 @@ Each game follows the `config.lua` / `gamestate.lua` / `game.lua` /
 
 ## Licensing
 
-Original work, © 2026 sdwfrost, under the MIT [LICENSE](LICENSE), staged
+Original work, © 2026 Simon Frost, under the MIT [LICENSE](LICENSE), staged
 into every built `.pdx`.
