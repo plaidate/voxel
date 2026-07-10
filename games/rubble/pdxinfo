@@ -1,6 +1,7 @@
 name=Rubble
-author=sdwfrost
+author=Simon Frost
 description=Carve the arena. Survive the grubs.
 bundleID=com.sdwfrost.voxel.rubble
 version=0.1
-buildNumber=1
+buildNumber=2
+imagePath=launcher

@@ -1,6 +1,7 @@
 name=Summit
-author=sdwfrost
+author=Simon Frost
 description=Sumo on a crumbling ziggurat.
 bundleID=com.sdwfrost.voxel.summit
 version=0.1
-buildNumber=1
+buildNumber=2
+imagePath=launcher

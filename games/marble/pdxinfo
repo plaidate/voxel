@@ -1,6 +1,7 @@
 name=Marble
-author=sdwfrost
+author=Simon Frost
 description=Roll downhill. Dodge the goo. Beat the clock.
 bundleID=com.sdwfrost.voxel.marble
 version=0.1
-buildNumber=1
+buildNumber=2
+imagePath=launcher

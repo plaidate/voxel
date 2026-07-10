@@ -1,6 +1,7 @@
 name=Bulwark
-author=sdwfrost
+author=Simon Frost
 description=Wall in your keep. Survive the siege.
 bundleID=com.sdwfrost.voxel.bulwark
 version=0.1
-buildNumber=1
+buildNumber=2
+imagePath=launcher
