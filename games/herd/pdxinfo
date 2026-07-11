@@ -3,5 +3,5 @@ author=Simon Frost
 description=Dig, blast and drain a path. Get the flock home.
 bundleID=com.sdwfrost.voxel.herd
 version=0.1
-buildNumber=2
+buildNumber=3
 imagePath=launcher

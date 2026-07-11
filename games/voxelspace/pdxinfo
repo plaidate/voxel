@@ -3,5 +3,5 @@ author=Simon Frost
 description=Comanche-style heightmap flyover. Crank steers, d-pad climbs.
 bundleID=com.sdwfrost.voxel.voxelspace
 version=0.1
-buildNumber=2
+buildNumber=3
 imagePath=launcher

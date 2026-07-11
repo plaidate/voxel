@@ -3,5 +3,5 @@ author=Simon Frost
 description=Climb the crumbling columns. Outlast the rising slime.
 bundleID=com.sdwfrost.voxel.crumble
 version=0.1
-buildNumber=2
+buildNumber=3
 imagePath=launcher

@@ -3,5 +3,5 @@ author=Simon Frost
 description=A dungeon of voxels. Every wall is a door if you have a bomb.
 bundleID=com.sdwfrost.voxel.vault
 version=0.1
-buildNumber=2
+buildNumber=3
 imagePath=launcher
