@@ -4,16 +4,14 @@
 -- notches, blast gaps, even drain goo by carving off its surface. Crank
 -- sets the release rate.
 
-local snd = {
-    pop = playdate.sound.synth.new(playdate.sound.kWaveSquare),
-    home = playdate.sound.synth.new(playdate.sound.kWaveSquare),
-    dig = playdate.sound.synth.new(playdate.sound.kWaveNoise),
-    boom = playdate.sound.synth.new(playdate.sound.kWaveNoise),
-    die = playdate.sound.synth.new(playdate.sound.kWaveSawtooth),
-    clear = playdate.sound.synth.new(playdate.sound.kWaveTriangle),
-}
-
 local GOO = 1 -- surface material sheep refuse to walk on (and die in)
+
+-- bucolic waltz-ish: F/C oom-pah-pah lilt, no hat
+local TRACK = {
+    bpm = 100,
+    bass = { 41, 0, 0, 0, 0, 0, 0, 0, 36, 0, 0, 0, 0, 0, 0, 0 },
+    lead = { 0, 0, 0, 65, 0, 0, 69, 0, 0, 0, 0, 64, 0, 0, 67, 0 },
+}
 
 Game = {
     crits = {},
@@ -27,8 +25,17 @@ Game.sheepModel = VoxModel.fromLayers({
 
 local tryMove = VoxPhys.tryMove
 
-local function surfaceAt(x, y)
-    return Vox.get(x, y, Vox.heightAt(x, y) - 1)
+-- top-of-column material (integer coords)
+local function surfMat(x, y)
+    local _, m = Vox.surfaceAt(x, y)
+    return m
+end
+
+-- Kit.spawnPart with Herd's original debris tunables
+local popts = { speed = 12, vzMin = 3, vzMax = 12 }
+local function spawnPart(x, y, z, m)
+    popts.m = m
+    Kit.spawnPart(Game.parts, x, y, z, popts)
 end
 
 function Game.genLevel(level)
@@ -39,9 +46,9 @@ function Game.genLevel(level)
             Vox.set(x, y, 0, 2)
             Vox.set(x, y, 1, 2)
             Vox.set(x, y, 2, 2)
-            Vox.set(x, y, 3, (x % 8 == 0 or y % 8 == 0) and 3 or 2)
         end
     end
+    Vox.floorGrid(2, 3, 8, 3)
     -- spawn platform, west
     for x = 3, 9 do
         for y = Vox.D // 2 - 5, Vox.D // 2 + 5 do
@@ -104,32 +111,20 @@ local function beginLevel()
     State.quota = Config.QUOTA_BASE + math.min(State.level - 1, 3)
     State.blasts = Config.BLASTS
     State.spawnT = 1
-    State.phase = "banner"
-    State.phaseT = Config.BANNER_T
+    Kit.setMode("play", Config.BANNER_T)
     State.banner = "LEVEL " .. State.level .. " - SAVE " .. State.quota
 end
 
 function Game.startGame()
     State.reset()
-    State.mode = "play"
+    Music.set(TRACK)
     beginLevel()
 end
 
 function Game.init()
+    Kit.loadBest()
     Game.startGame()
-    State.mode = "title"
-end
-
-function Game.spawnPart(x, y, z, m)
-    if #Game.parts > 40 then return end
-    Game.parts[#Game.parts + 1] = {
-        x = x, y = y, z = z,
-        vx = (math.random() - 0.5) * 12,
-        vy = (math.random() - 0.5) * 12,
-        vz = math.random() * 9 + 3,
-        t = 0.6 + math.random() * 0.4,
-        m = m,
-    }
+    Kit.setMode("title")
 end
 
 local function spawnSheep()
@@ -140,21 +135,21 @@ local function spawnSheep()
         hw = 0.8, grounded = true,
         side = math.random() < 0.5 and 1 or -1, bestX = 6, noProgT = 0,
     }
-    snd.pop:playNote(880, 0.25, 0.05)
+    Snd.play("square", 880, 0.05, 0.25)
     Harness.count("spawned")
 end
 
 local function killSheep(i, why)
     local c = table.remove(Game.crits, i)
     State.dead = State.dead + 1
-    for _ = 1, 5 do Game.spawnPart(c.x, c.y, c.z + 1, why == "goo" and 1 or 4) end
-    snd.die:playNote(why == "goo" and 65 or 110, 0.4, 0.15)
+    for _ = 1, 5 do spawnPart(c.x, c.y, c.z + 1, why == "goo" and 1 or 4) end
+    Snd.play("saw", why == "goo" and 65 or 110, 0.15, 0.4)
     Harness.count("deaths")
 end
 
 -- goo ahead reads as a wall to a sheep
 local function walkable(c, nx, ny)
-    if surfaceAt(math.floor(nx), math.floor(ny)) == GOO then return false end
+    if surfMat(math.floor(nx), math.floor(ny)) == GOO then return false end
     return tryMove(c, nx, ny)
 end
 
@@ -185,13 +180,13 @@ local function updateSheep(dt)
         if c.grounded then
             if fallV < -Config.SPLAT_VZ then
                 killSheep(i, "splat")
-            elseif surfaceAt(math.floor(c.x), math.floor(c.y)) == GOO then
+            elseif surfMat(math.floor(c.x), math.floor(c.y)) == GOO then
                 killSheep(i, "goo")
             elseif c.x >= 88 then
                 table.remove(Game.crits, i)
                 State.saved = State.saved + 1
                 State.score = State.score + 10
-                snd.home:playNote(1319, 0.3, 0.07)
+                Snd.play("square", 1319, 0.07, 0.3)
                 Harness.count("saved")
             end
         end
@@ -202,16 +197,16 @@ function Game.dig(x, y)
     local z = Vox.heightAt(x, y) - 1
     local removed = Vox.carve(x, y, z, Config.DIG_R)
     Harness.count("digs")
-    snd.dig:playNote(200, 0.3, 0.08)
+    Snd.play("noise", 200, 0.08, 0.3)
     for _ = 1, math.min(#removed, 4) do
         local v = removed[math.random(#removed)]
-        Game.spawnPart(v[1], v[2], v[3], v[4])
+        spawnPart(v[1], v[2], v[3], v[4])
     end
 end
 
 function Game.blast(x, y)
     if State.blasts <= 0 then
-        snd.die:playNote(110, 0.3, 0.06)
+        Snd.play("saw", 110, 0.06, 0.3)
         return
     end
     State.blasts = State.blasts - 1
@@ -219,10 +214,10 @@ function Game.blast(x, y)
     local removed = Vox.carve(x, y, z, Config.BLAST_R)
     Harness.count("blastsused")
     Harness.count("carved", #removed)
-    snd.boom:playNote(80, 0.5, 0.3)
+    Snd.play("noise", 80, 0.3, 0.5)
     for _ = 1, math.min(#removed, 8) do
         local v = removed[math.random(#removed)]
-        Game.spawnPart(v[1], v[2], v[3], v[4])
+        spawnPart(v[1], v[2], v[3], v[4])
     end
     -- sheep caught in the blast
     for i = #Game.crits, 1, -1 do
@@ -234,15 +229,16 @@ end
 local function resolveLevel()
     if State.saved >= State.quota then
         State.score = State.score + State.blasts * 5
-        snd.clear:playNote(523, 0.3, 0.1)
-        Util.after(0.12, function() snd.clear:playNote(784, 0.3, 0.15) end)
+        Snd.play("tri", 523, 0.1, 0.3)
+        Util.after(0.12, function() Snd.play("tri", 784, 0.15, 0.3) end)
         Harness.count("clears")
         State.level = State.level + 1
         beginLevel()
     else
-        State.mode = "over"
+        Kit.setMode("over", 1.2)
         State.reason = "FLOCK LOST"
-        State.phaseT = 1.2
+        State.newBest = Kit.saveBest(State.score)
+        Music.stop()
         Harness.count("gameovers")
     end
 end
@@ -275,23 +271,19 @@ local function autoplay(dt)
 end
 
 function Game.update(dt)
+    Music.update(dt)
     local inp = Input.state
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         if inp.confirm then Game.startGame() end
         return
     end
-    if State.mode == "over" then
-        State.phaseT = math.max(0, State.phaseT - dt)
+    if Kit.mode == "over" then
         Kit.updateParts(Game.parts, dt)
-        if State.phaseT <= 0 and inp.confirm then Game.startGame() end
+        if Kit.modeT <= 0 and inp.confirm then Game.startGame() end
         return
     end
     Kit.updateParts(Game.parts, dt)
-    if State.phase == "banner" then
-        State.phaseT = State.phaseT - dt
-        if State.phaseT <= 0 then State.phase = "run" end
-        return
-    end
+    if Kit.modeT > 0 then return end -- level banner
     -- run
     if inp.rate then State.rate = inp.rate end
     if Harness.enabled then autoplay(dt) end

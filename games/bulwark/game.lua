@@ -4,20 +4,19 @@
 -- catapults on the east edge lob carving shells at your walls and keep
 -- while you return fire with the keep cannon. Survive ROUNDS sieges.
 
-local snd = {
-    place = playdate.sound.synth.new(playdate.sound.kWaveSquare),
-    bad = playdate.sound.synth.new(playdate.sound.kWaveSawtooth),
-    boom = playdate.sound.synth.new(playdate.sound.kWaveNoise),
-    fire = playdate.sound.synth.new(playdate.sound.kWaveTriangle),
-    kill = playdate.sound.synth.new(playdate.sound.kWaveSquare),
-    alarm = playdate.sound.synth.new(playdate.sound.kWaveSawtooth),
-}
-
 Game = {
     cats = {},
     shells = {},
     parts = {},
     cannon = nil,
+}
+
+-- tense march: A-minor bass pulse under sparse minor-second stabs
+local TRACK = {
+    bpm = 116,
+    bass = { 33, 0, 33, 0, 36, 0, 33, 0, 33, 0, 33, 0, 40, 0, 39, 0 },
+    lead = { 0, 0, 0, 0, 69, 0, 0, 0, 0, 0, 0, 0, 68, 0, 69, 0 },
+    hat = { 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0 },
 }
 
 Game.catModel = VoxModel.fromLayers({
@@ -107,7 +106,7 @@ end
 
 function Game.placePiece()
     if not Game.canPlace(State.curX, State.curY) then
-        snd.bad:playNote(110, 0.3, 0.08)
+        Snd.play("saw", 110, 0.08, 0.3)
         return
     end
     local x0, x1 = 99, 0
@@ -118,19 +117,20 @@ function Game.placePiece()
         if cx * 2 + 1 > x1 then x1 = cx * 2 + 1 end
     end
     Vox.repaint(x0 - 1, x1 + 1)
-    snd.place:playNote(523, 0.25, 0.06)
+    Snd.play("square", 523, 0.06, 0.25)
     Harness.count("placed")
     newPiece()
 end
 
 function Game.buildWorld()
     Vox.clear()
+    -- indestructible soil course, then the etched-grid ground plane
     for x = 0, Vox.W - 1 do
         for y = 0, Vox.D - 1 do
             Vox.set(x, y, 0, 2)
-            Vox.set(x, y, 1, (x % 8 == 0 or y % 8 == 0) and 1 or 2)
         end
     end
+    Vox.floorGrid(2, 1)
     -- the keep
     for x = 23, 29 do
         for y = 29, 35 do
@@ -189,22 +189,25 @@ local function spawnCats()
         Game.cats[i] = {
             x = 86.5 + math.random(0, 4),
             y = 6 + (i - 0.5) * (Vox.D - 12) / n + math.random(-3, 3),
-            z = 2, fireT = 0.8 + math.random() * 2,
+            z = 2, vz = 0, hw = 1, grounded = true,
+            fireT = 0.8 + math.random() * 2,
         }
     end
 end
 
 local function gameOver(reason, won)
-    State.mode = "over"
     State.reason = reason
     State.won = won or false
-    State.phaseT = 1.2
+    State.newBest = Kit.saveBest(State.score)
+    Kit.setMode("over", 1.2)
+    Music.stop()
     Harness.count(won and "wins" or "gameovers")
 end
 
 function Game.startGame()
     State.reset()
-    State.mode = "play"
+    Kit.setMode("play")
+    Music.set(TRACK)
     Game.buildWorld()
     Game.cats = {}
     Game.shells = {}
@@ -216,42 +219,25 @@ function Game.startGame()
 end
 
 function Game.init()
+    Kit.loadBest()
     Game.startGame()
-    State.mode = "title"
+    Kit.setMode("title")
 end
 
-function Game.spawnPart(x, y, z, m)
-    if #Game.parts > 40 then return end
-    Game.parts[#Game.parts + 1] = {
-        x = x, y = y, z = z,
-        vx = (math.random() - 0.5) * 14,
-        vy = (math.random() - 0.5) * 14,
-        vz = math.random() * 10 + 4,
-        t = 0.7 + math.random() * 0.4,
-        m = m,
-    }
-end
+-- shared solver opts; err is per-shot. The muzzle matches the old
+-- bulwark sim: shells are solved from the mount, launched 1.5 up.
+local solveOpts = {
+    vmin = Config.VMIN, vmax = Config.VMAX,
+    elevCos = Config.ELEV_COS, elevSin = Config.ELEV_SIN,
+    iters = 8, errV = 2,
+    muzzle = function(o)
+        return o.x, o.y, o.z + 1.5
+    end,
+}
 
-local function simImpact(origin, az, v)
-    local p = VoxProj.launch(origin.x, origin.y, origin.z + 1.5, az, v,
-        Config.ELEV_COS, Config.ELEV_SIN)
-    for _ = 1, 300 do
-        if VoxProj.step(p, 1 / 30, Config.GRAVITY) then break end
-    end
-    return p.x, p.y
-end
-
-local function solveShot(origin, tx, ty, err)
-    local az = math.atan(ty - origin.y, tx - origin.x)
-    local bestV, bestMiss = 30, math.huge
-    for i = 0, 8 do
-        local v = Config.VMIN + (Config.VMAX - Config.VMIN) * i / 8
-        local ix, iy = simImpact(origin, az, v)
-        local miss = (ix - tx) ^ 2 + (iy - ty) ^ 2
-        if miss < bestMiss then bestMiss, bestV = miss, v end
-    end
-    local function n() return math.random() + math.random() - 1 end
-    return az + n() * err * 0.03, bestV + n() * err * 2
+local function solveShot(origin, target, err)
+    solveOpts.err = err
+    return VoxProj.solve(origin, target, solveOpts)
 end
 
 local function fireShell(origin, az, v)
@@ -259,23 +245,20 @@ local function fireShell(origin, az, v)
     Game.shells[#Game.shells + 1] = VoxProj.launch(
         origin.x + ca * 1.5, origin.y + sa * 1.5, origin.z + 1.5, az, v,
         Config.ELEV_COS, Config.ELEV_SIN)
-    snd.fire:playNote(131, 0.35, 0.12)
+    Snd.play("tri", 131, 0.12, 0.35)
     Harness.count("shots")
 end
 
 local function explode(x, y, z)
     local removed = Vox.carve(x, y, z, Config.CARVE_R)
     Harness.count("carved", #removed)
-    snd.boom:playNote(80, 0.5, 0.3)
-    for _ = 1, math.min(#removed, 8) do
-        local v = removed[math.random(#removed)]
-        Game.spawnPart(v[1], v[2], v[3], v[4])
-    end
-    Game.spawnPart(x, y, z, 4)
+    Snd.play("noise", 80, 0.3, 0.5)
+    Kit.burst(Game.parts, removed, 8)
+    Kit.spawnPart(Game.parts, x, y, z, { m = 4, speed = 14, vzMax = 14 })
     if (x - KEEP.x) ^ 2 + (y - KEEP.y) ^ 2 < 36 then
         State.keepHp = State.keepHp - 1
         State.keepFlash = 0.8
-        snd.alarm:playNote(98, 0.5, 0.3)
+        Snd.play("saw", 98, 0.3, 0.5)
         Harness.count("keephits")
         if State.keepHp <= 0 then
             gameOver("CASTLE FELL")
@@ -287,8 +270,11 @@ local function explode(x, y, z)
         if (c.x - x) ^ 2 + (c.y - y) ^ 2 < 12 then
             table.remove(Game.cats, j)
             State.score = State.score + 25
-            for _ = 1, 6 do Game.spawnPart(c.x, c.y, c.z + 1, math.random() < 0.5 and 1 or 4) end
-            snd.kill:playNote(784, 0.3, 0.1)
+            for _ = 1, 6 do
+                Kit.spawnPart(Game.parts, c.x, c.y, c.z + 1,
+                    { m = math.random() < 0.5 and 1 or 4, speed = 14, vzMax = 14 })
+            end
+            Snd.play("square", 784, 0.1, 0.3)
             Harness.count("catskilled")
         end
     end
@@ -308,38 +294,15 @@ end
 local function updateShells(dt)
     for i = #Game.shells, 1, -1 do
         local s = Game.shells[i]
-        local hit = false
-        for _ = 1, 4 do
-            if VoxProj.step(s, dt / 4, Config.GRAVITY) then
-                explode(s.x, s.y, s.z)
-                hit = true
-                break
-            end
-        end
+        local hit = VoxProj.step(s, dt, Config.GRAVITY)
+        if hit then explode(s.x, s.y, s.z) end
         s.t = s.t - dt
         if hit or s.t <= 0 then table.remove(Game.shells, i) end
     end
 end
 
-local function updateParts(dt)
-    for i = #Game.parts, 1, -1 do
-        local q = Game.parts[i]
-        q.t = q.t - dt
-        q.vz = q.vz - Config.GRAVITY * dt
-        q.x = q.x + q.vx * dt
-        q.y = q.y + q.vy * dt
-        q.z = q.z + q.vz * dt
-        local g = Vox.heightAt(math.floor(q.x), math.floor(q.y))
-        if q.z < g then
-            q.z = g
-            q.vz = -q.vz * 0.4
-            q.vx, q.vy = q.vx * 0.6, q.vy * 0.6
-        end
-        if q.t <= 0 then table.remove(Game.parts, i) end
-    end
-end
-
 local apT = 0
+local catTgt = {}
 local function autoplay(dt)
     if State.phase == "build" then
         apT = apT - dt
@@ -361,7 +324,7 @@ local function autoplay(dt)
         local can = Game.cannon
         if can.cd <= 0 and #Game.cats > 0 then
             local c = Game.cats[math.random(#Game.cats)]
-            local az, v = solveShot(can, c.x, c.y, Config.AP_ERR)
+            local az, v = solveShot(can, c, Config.AP_ERR)
             fireShell(can, az, v)
             can.cd = Config.CANNON_CD + 0.4
         end
@@ -389,20 +352,24 @@ local function endSiege()
 end
 
 function Game.update(dt)
+    Music.update(dt)
     local inp = Input.state
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         if inp.confirm then Game.startGame() end
         return
     end
-    if State.mode == "over" then
-        State.phaseT = math.max(0, State.phaseT - dt)
-        updateParts(dt)
-        if State.phaseT <= 0 and inp.confirm then Game.startGame() end
+    if Kit.mode == "over" then
+        Kit.updateParts(Game.parts, dt)
+        if Kit.modeT <= 0 and inp.confirm then Game.startGame() end
         return
     end
-    updateParts(dt)
+    Kit.updateParts(Game.parts, dt)
     updateShells(dt)
-    if State.mode ~= "play" then return end -- a shell may have ended the game
+    if Kit.mode ~= "play" then return end -- a shell may have ended the game
+    -- catapults settle when the ground is carved from under them
+    for _, c in ipairs(Game.cats) do
+        VoxPhys.physZ(c, dt, Config.GRAVITY)
+    end
     State.keepFlash = math.max(0, State.keepFlash - dt)
     local can = Game.cannon
     can.cd = math.max(0, can.cd - dt)
@@ -431,8 +398,8 @@ function Game.update(dt)
             c.fireT = c.fireT - dt
             if c.fireT <= 0 then
                 c.fireT = 2.2 + math.random() * 1.4
-                local tx, ty = catTarget()
-                local az, v = solveShot(c, tx, ty, Config.CAT_ERR)
+                catTgt.x, catTgt.y = catTarget()
+                local az, v = solveShot(c, catTgt, Config.CAT_ERR)
                 fireShell(c, az, v)
             end
         end

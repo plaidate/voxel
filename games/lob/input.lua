@@ -20,7 +20,7 @@ function Input.poll()
         apFrame = apFrame + 1
         s.aim, s.rotL, s.rotR = nil, false, false
         s.chargeStart, s.fire = false, false
-        s.confirm = State.mode ~= "play" and apFrame % 30 == 0
+        s.confirm = Kit.mode ~= "play" and apFrame % 30 == 0
         return
     end
     local pd = playdate

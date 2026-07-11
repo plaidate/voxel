@@ -148,7 +148,7 @@ end
 
 function Draw.frame()
     render()
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         Kit.title("VOXELSPACE", {
             "crank/left right steers, up down climbs",
             "hold Ⓐ to boost, Ⓑ new terrain",

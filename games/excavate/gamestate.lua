@@ -1,7 +1,8 @@
--- Excavate: game state. mode is "title", "play" or "over"; phase is
--- "banner" or "run".
+-- Excavate: game state. The mode lives in Kit.mode ("title", "play" or
+-- "over"); Kit.modeT > 0 is the shift banner (in play) or the game-over
+-- input lockout.
 
-State = { mode = "title" }
+State = {}
 
 function State.reset()
     State.score = 0
@@ -9,8 +10,6 @@ function State.reset()
     State.hp = Config.MAX_HP
     State.left = 0
     State.timer = Config.SHIFT_T
-    State.phase = "banner"
-    State.phaseT = 0
     State.banner = ""
     State.reason = ""
 end

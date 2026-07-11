@@ -1,17 +1,16 @@
--- Marble: game state. mode is "title", "play" or "over"; phase is
--- "banner" or "run".
+-- Marble: game state. The mode lives in Kit.mode ("title", "play" or
+-- "over"); Kit.modeT > 0 during play is the course banner.
 
-State = { mode = "title" }
+State = {}
 
 function State.reset()
     State.score = 0
     State.course = 1
     State.marbles = Config.MARBLES
     State.timer = Config.COURSE_T
-    State.phase = "banner"
-    State.phaseT = 0
     State.banner = ""
     State.reason = ""
+    State.newBest = false
 end
 
 State.reset()

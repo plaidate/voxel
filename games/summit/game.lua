@@ -3,16 +3,16 @@
 -- knocked down. A shoves; a full crank-wound meter turns the next A into
 -- a radial spin. The lowest terrace erodes into the goo on a timer.
 
-local snd = {
-    shove = playdate.sound.synth.new(playdate.sound.kWaveSquare),
-    spin = playdate.sound.synth.new(playdate.sound.kWaveSawtooth),
-    splash = playdate.sound.synth.new(playdate.sound.kWaveNoise),
-    rumble = playdate.sound.synth.new(playdate.sound.kWaveNoise),
-    round = playdate.sound.synth.new(playdate.sound.kWaveTriangle),
-}
-
 local GOO = 1
 local TEMPLATE = { { 27, 23 }, { 20, 17 }, { 13, 11 }, { 7, 6 } }
+
+-- airy climb: sparse roots under a rising add9 arpeggio
+local TRACK = {
+    bpm = 92,
+    bass = { 36, 0, 0, 0, 0, 0, 0, 0, 43, 0, 0, 0, 0, 0, 0, 0 },
+    lead = { 60, 0, 64, 0, 67, 0, 71, 0, 72, 0, 74, 0, 72, 0, 67, 0 },
+    hat  = { 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0 },
+}
 
 Game = {
     player = nil,
@@ -38,25 +38,40 @@ Game.bruteModel = VoxModel.fromLayers({
 
 local CX, CY = 48, 32
 
+-- terrace level for a column under the current Game.terr
+local function levelAt(x, y)
+    for i = 4, 1, -1 do
+        local t = Game.terr[i]
+        if t and math.abs(x - CX) <= t[1] and math.abs(y - CY) <= t[2] then
+            return i
+        end
+    end
+    return 0
+end
+
+-- rebuild one column above the bedrock exactly as buildZiggurat would
+local function rewriteColumn(x, y)
+    for z = 1, Vox.H - 1 do Vox.set(x, y, z, nil) end
+    local level = levelAt(x, y)
+    if level > 0 then
+        local top = 1 + 2 * level
+        local cap = (level % 2 == 0) and 2 or 3
+        Vox.column(x, y, top, 2, cap)
+    else
+        Vox.set(x, y, 1, GOO)
+    end
+end
+
 function Game.buildZiggurat()
     Vox.clear()
     for x = 0, Vox.W - 1 do
         for y = 0, Vox.D - 1 do
             Vox.set(x, y, 0, 2)
-            local level = 0
-            for i = 4, 1, -1 do
-                local t = Game.terr[i]
-                if t and math.abs(x - CX) <= t[1] and math.abs(y - CY) <= t[2] then
-                    level = i
-                    break
-                end
-            end
+            local level = levelAt(x, y)
             if level > 0 then
                 local top = 1 + 2 * level
                 local cap = (level % 2 == 0) and 2 or 3
-                for z = 1, top do
-                    Vox.set(x, y, z, z == top and cap or 2)
-                end
+                Vox.column(x, y, top, 2, cap)
             else
                 Vox.set(x, y, 1, GOO)
             end
@@ -66,8 +81,8 @@ function Game.buildZiggurat()
 end
 
 local function gooAt(x, y)
-    return Vox.get(math.floor(x), math.floor(y),
-        Vox.heightAt(math.floor(x), math.floor(y)) - 1) == GOO
+    local _, m = Vox.surfaceAt(math.floor(x), math.floor(y))
+    return m == GOO
 end
 
 local function spawnRound()
@@ -95,33 +110,51 @@ local function spawnRound()
         }
     end
     State.erodeIn = Config.EROSION_T
-    State.phase = "banner"
-    State.phaseT = Config.BANNER_T
+    Kit.setMode("play", Config.BANNER_T)
     State.banner = "ROUND " .. State.round
 end
 
 function Game.startGame()
     State.reset()
-    State.mode = "play"
+    Music.set(TRACK)
     spawnRound()
 end
 
 function Game.init()
+    Kit.loadBest()
     Game.startGame()
-    State.mode = "title"
+    Kit.setMode("title")
 end
 
+-- shrink the lowest terrace and rewrite ONLY the columns whose terrace
+-- level changed (the old box minus the new box; the whole old box when
+-- the terrace collapses), then repaint the dirty strip — the old
+-- full-world rebuild (Vox.clear + re-set + buildBG) was a frame spike.
 local function erode()
     local t = Game.terr[Game.low]
     if not t then return end
+    local ox, oy = t[1], t[2]
     t[1], t[2] = t[1] - 2, t[2] - 2
     local nxt = Game.terr[Game.low + 1]
+    local collapsed = false
     if t[1] < 3 or (nxt and t[1] <= nxt[1]) then
         Game.terr[Game.low] = false
         Game.low = Game.low + 1
+        collapsed = true
     end
-    Game.buildZiggurat()
-    snd.rumble:playNote(50, 0.5, 0.4)
+    local x0 = math.max(0, CX - ox)
+    local x1 = math.min(Vox.W - 1, CX + ox)
+    local y0 = math.max(0, CY - oy)
+    local y1 = math.min(Vox.D - 1, CY + oy)
+    for x = x0, x1 do
+        for y = y0, y1 do
+            if collapsed or math.abs(x - CX) > t[1] or math.abs(y - CY) > t[2] then
+                rewriteColumn(x, y)
+            end
+        end
+    end
+    Vox.repaint(x0, x1)
+    Snd.play("noise", 50, 0.4, 0.5)
     Harness.count("erosions")
 end
 
@@ -144,7 +177,7 @@ end
 
 local function splashKO(e)
     for _ = 1, 7 do Kit.spawnPart(Game.parts, e.x, e.y, e.z + 1, 1) end
-    snd.splash:playNote(65, 0.5, 0.3)
+    Snd.play("noise", 65, 0.3, 0.5)
 end
 
 local function shoveBrutes(px, py, fx, fy, radius, kb, arc)
@@ -194,23 +227,19 @@ local function autoplay(dt, inp)
 end
 
 function Game.update(dt)
+    Music.update(dt)
     local inp = Input.state
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         if inp.confirm then Game.startGame() end
         return
     end
-    if State.mode == "over" then
-        State.phaseT = math.max(0, State.phaseT - dt)
+    if Kit.mode == "over" then
         Kit.updateParts(Game.parts, dt)
-        if State.phaseT <= 0 and inp.confirm then Game.startGame() end
+        if Kit.modeT <= 0 and inp.confirm then Game.startGame() end
         return
     end
     Kit.updateParts(Game.parts, dt)
-    if State.phase == "banner" then
-        State.phaseT = State.phaseT - dt
-        if State.phaseT <= 0 then State.phase = "run" end
-        return
-    end
+    if Kit.modeT > 0 then return end -- round banner
     if Harness.enabled then autoplay(dt, inp) end
     local p = Game.player
     p.cd = math.max(0, p.cd - dt)
@@ -225,20 +254,21 @@ function Game.update(dt)
         p.cd = Config.SHOVE_CD
         if p.charge >= 1 then
             p.charge = 0
-            snd.spin:playNote(150, 0.5, 0.25)
+            Snd.play("saw", 150, 0.25, 0.5)
             shoveBrutes(p.x, p.y, 0, 0, Config.SPIN_R, Config.SPIN_KB, false)
             Harness.count("spins")
         else
-            snd.shove:playNote(330, 0.3, 0.07)
+            Snd.play("square", 330, 0.07, 0.3)
             shoveBrutes(p.x, p.y, p.fx, p.fy, Config.SHOVE_R, Config.SHOVE_KB, true)
             Harness.count("shoves")
         end
     end
     if p.grounded and gooAt(p.x, p.y) then
         splashKO(p)
-        State.mode = "over"
+        Kit.setMode("over", 1.2)
         State.reason = "IN THE GOO"
-        State.phaseT = 1.2
+        State.newBest = Kit.saveBest(State.score)
+        Music.stop()
         Harness.count("gameovers")
         return
     end
@@ -257,7 +287,7 @@ function Game.update(dt)
             p.kby = p.kby + dy / d * Config.BRUTE_KB
             p.vz = 4
             p.grounded = false
-            snd.shove:playNote(196, 0.3, 0.07)
+            Snd.play("square", 196, 0.07, 0.3)
         end
         if b.grounded and gooAt(b.x, b.y) then
             splashKO(b)
@@ -269,7 +299,7 @@ function Game.update(dt)
     if #Game.brutes == 0 then
         State.score = State.score + 25
         State.round = State.round + 1
-        snd.round:playNote(784, 0.3, 0.12)
+        Snd.play("tri", 784, 0.12, 0.3)
         Harness.count("rounds")
         spawnRound()
         return

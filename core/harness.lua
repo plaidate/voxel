@@ -16,6 +16,13 @@ Harness = {
     shotPath = nil,  -- host path for screenshots (set by the game or smoke.sh convention)
 }
 
+-- a stale "err" from a previous run must not masquerade as a current one
+if Harness.enabled then
+    playdate.datastore.delete("err")
+end
+
+local errLatched = false
+
 function Harness.count(key, n)
     if not Harness.enabled then return end
     Harness.counters[key] = (Harness.counters[key] or 0) + (n or 1)
@@ -33,7 +40,9 @@ function Harness.frame(frame, updateFn)
         return
     end
     local ok, err = pcall(updateFn)
-    if not ok then
+    if not ok and not errLatched then
+        -- latch the FIRST error: later failures are usually fallout
+        errLatched = true
         playdate.datastore.write({ err = tostring(err) }, "err")
     end
     if frame % 90 == 0 then

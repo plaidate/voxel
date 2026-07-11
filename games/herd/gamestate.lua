@@ -1,13 +1,11 @@
--- Herd: game state. mode is "title", "play" or "over"; phase is "banner"
--- (level intro / clear) or "run".
+-- Herd: game state. The mode lives in Kit.mode ("title", "play" or
+-- "over"); Kit.modeT > 0 during play is the level banner.
 
-State = { mode = "title" }
+State = {}
 
 function State.reset()
     State.score = 0
     State.level = 1
-    State.phase = "banner"
-    State.phaseT = 0
     State.banner = ""
     State.timer = Config.LEVEL_T
     State.saved = 0
@@ -20,6 +18,7 @@ function State.reset()
     State.digCd = 0
     State.curX, State.curY = 30, 32
     State.reason = ""
+    State.newBest = false
 end
 
 State.reset()

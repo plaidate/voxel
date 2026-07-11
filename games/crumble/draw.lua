@@ -1,6 +1,6 @@
 -- Crumble: drawing. Same scene pattern as Rubble (bg blit, painter-sorted
--- actors, Vox.occlude) plus screen shake on slime rises and a spring
--- charge meter in the bottom margin.
+-- actors, Vox.occlude, ghost pass) plus Kit screen shake on slime rises
+-- and a spring charge meter in the bottom margin.
 
 local gfx = playdate.graphics
 
@@ -11,9 +11,10 @@ local function drawPlayer()
     if p.inv > 0 and math.floor(p.inv * 15) % 2 == 0 then
         return
     end
-    Kit.shadow(p.x, p.y, 1.2)
+    Kit.shadow(p.x, p.y, 1.2, p.z)
     VoxModel.draw(Game.playerModel, p.x, p.y, p.z)
     Vox.occlude(p.x - 2, p.x + 2, p.y, p.z, p.z + 4)
+    VoxModel.drawGhost(Game.playerModel, p.x, p.y, p.z)
 end
 
 local function drawGem(gm)
@@ -60,33 +61,32 @@ local function drawHud()
 end
 
 local function drawTitle()
-    Kit.panel(50, 48, 300, 130)
-    Kit.bigCentered("CRUMBLE", 56, 3)
-    Kit.centered("the slime rises - stay high, grab gems", 118)
-    Kit.centered("d-pad move / Ⓑ hop / crank + Ⓐ spring", 136)
-    Kit.centered("press Ⓐ to start", 156)
+    Kit.panel(50, 44, 300, 148)
+    Kit.bigCentered("CRUMBLE", 52, 3)
+    Kit.centered("the slime rises - stay high, grab gems", 114)
+    Kit.centered("d-pad move / Ⓑ hop / crank + Ⓐ spring", 132)
+    Kit.centered("BEST " .. Kit.best, 150)
+    Kit.centered("press Ⓐ to start", 168)
 end
 
 local function drawDead()
-    Kit.panel(78, 70, 244, 86)
+    Kit.panel(78, 70, 244, 104)
     Kit.bigCentered("CONSUMED", 80, 2)
     Kit.centered("score " .. State.score .. " / slime " .. State.slimeLevel, 116)
-    Kit.centered("Ⓐ again", 134)
+    Kit.centered(State.newBest and "NEW BEST" or ("BEST " .. Kit.best), 134)
+    Kit.centered("Ⓐ again", 152)
 end
 
 function Draw.frame()
-    if State.shake > 0 then
-        playdate.display.setOffset(math.random(-2, 2), math.random(-1, 1))
-    else
-        playdate.display.setOffset(0, 0)
-    end
+    Kit.applyShake()
     drawScene()
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         drawTitle()
-    elseif State.mode == "dead" then
+    elseif Kit.mode == "dead" then
         drawDead()
         Kit.text("SCORE " .. State.score, 8, 3)
     else
         drawHud()
     end
+    Kit.doneShake()
 end

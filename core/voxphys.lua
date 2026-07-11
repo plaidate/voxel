@@ -3,16 +3,19 @@
 
 VoxPhys = {}
 
--- highest standing height under a square footprint
+-- highest standing height under a square footprint. Samples every integer
+-- column the [-hw,+hw] square touches (stride <= 1 including the center),
+-- not just the 4 corners: corner-only sampling let actors fall through
+-- 1-wide columns entirely inside the footprint.
 function VoxPhys.groundAt(x, y, hw)
     local floor = math.floor
-    local g = Vox.heightAt(floor(x - hw), floor(y - hw))
-    local h = Vox.heightAt(floor(x + hw), floor(y - hw))
-    if h > g then g = h end
-    h = Vox.heightAt(floor(x - hw), floor(y + hw))
-    if h > g then g = h end
-    h = Vox.heightAt(floor(x + hw), floor(y + hw))
-    if h > g then g = h end
+    local g = 0
+    for cy = floor(y - hw), floor(y + hw) do
+        for cx = floor(x - hw), floor(x + hw) do
+            local h = Vox.heightAt(cx, cy)
+            if h > g then g = h end
+        end
+    end
     return g
 end
 
@@ -40,29 +43,35 @@ function VoxPhys.support(x, y, fromZ)
     return s
 end
 
+-- highest support under the full footprint (same stride <= 1 sampling as
+-- groundAt, so 1-wide spires hold tunneled actors up too)
 local function supportAt(x, y, hw, z)
     local floor = math.floor
-    local g = VoxPhys.support(floor(x - hw), floor(y - hw), z)
-    local h = VoxPhys.support(floor(x + hw), floor(y - hw), z)
-    if h > g then g = h end
-    h = VoxPhys.support(floor(x - hw), floor(y + hw), z)
-    if h > g then g = h end
-    h = VoxPhys.support(floor(x + hw), floor(y + hw), z)
-    if h > g then g = h end
+    local g = 0
+    for cy = floor(y - hw), floor(y + hw) do
+        for cx = floor(x - hw), floor(x + hw) do
+            local h = VoxPhys.support(cx, cy, z)
+            if h > g then g = h end
+        end
+    end
     return g
 end
 VoxPhys.supportAt = supportAt
 
-local function headroomAt(x, y, hw, s, hr)
+-- any solid voxel at height z anywhere under the footprint?
+local function solidUnder(x, y, hw, z)
     local floor = math.floor
-    for dz = 0, hr - 1 do
-        local z = s + dz
-        if Vox.solid(floor(x - hw), floor(y - hw), z)
-            or Vox.solid(floor(x + hw), floor(y - hw), z)
-            or Vox.solid(floor(x - hw), floor(y + hw), z)
-            or Vox.solid(floor(x + hw), floor(y + hw), z) then
-            return false
+    for cy = floor(y - hw), floor(y + hw) do
+        for cx = floor(x - hw), floor(x + hw) do
+            if Vox.solid(cx, cy, z) then return true end
         end
+    end
+    return false
+end
+
+local function headroomAt(x, y, hw, s, hr)
+    for dz = 0, hr - 1 do
+        if solidUnder(x, y, hw, s + dz) then return false end
     end
     return true
 end
@@ -80,8 +89,7 @@ end
 function VoxPhys.physZTun(e, dt, gravity, hr)
     local s = supportAt(e.x, e.y, e.hw, e.z)
     e.vz = e.vz - gravity * dt
-    if e.vz > 0 and Vox.solid(math.floor(e.x), math.floor(e.y),
-            math.floor(e.z) + (hr or 3)) then
+    if e.vz > 0 and solidUnder(e.x, e.y, e.hw, math.floor(e.z) + (hr or 3)) then
         e.vz = 0
     end
     e.z = e.z + e.vz * dt

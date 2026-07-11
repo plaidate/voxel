@@ -3,15 +3,16 @@
 -- height map), steep faces bounce you, crests throw you airborne, goo
 -- pools eat marbles. The crank winds a boost; A releases it.
 
-local snd = {
-    boost = playdate.sound.synth.new(playdate.sound.kWaveSquare),
-    bounce = playdate.sound.synth.new(playdate.sound.kWaveTriangle),
-    goal = playdate.sound.synth.new(playdate.sound.kWaveSquare),
-    die = playdate.sound.synth.new(playdate.sound.kWaveSawtooth),
-}
-
 local GOO = 1
 local PAD = 4
+
+-- rolling minimal: hypnotic A-minor arp over a spare root pulse
+local TRACK = {
+    bpm = 112,
+    bass = { 33, 0, 0, 0, 0, 0, 0, 0, 33, 0, 0, 0, 40, 0, 0, 0 },
+    lead = { 57, 0, 60, 0, 64, 0, 60, 0, 57, 0, 60, 0, 64, 0, 67, 0 },
+    hat  = { 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0 },
+}
 
 Game = {
     ball = nil,
@@ -28,54 +29,44 @@ local function hAt(x, y)
 end
 
 local function surfAt(x, y)
-    return Vox.get(math.floor(x), math.floor(y), hAt(x, y) - 1)
+    local _, m = Vox.surfaceAt(math.floor(x), math.floor(y))
+    return m
 end
 
 function Game.buildCourse(course)
     Vox.clear()
     local W, D = Vox.W, Vox.D
-    local hm = {}
-    for x = 0, W - 1 do
-        for y = 0, D - 1 do
-            hm[y * W + x] = 9 - 7 * (x / (W - 1))
-        end
-    end
-    -- moguls and valleys
+    -- moguls and valleys (same RNG call order as the old inline loop)
+    local bumps = {}
     for _ = 1, 8 + course do
         local cx = math.random(14, W - 15)
         local cy = math.random(6, D - 7)
         local r = math.random(6, 12)
         local h = (math.random() * 2 + 1.2) * (math.random() < 0.5 and 1 or -1)
-        for x = math.max(0, cx - r), math.min(W - 1, cx + r) do
-            for y = math.max(0, cy - r), math.min(D - 1, cy + r) do
-                local d2 = ((x - cx) ^ 2 + (y - cy) ^ 2) / (r * r)
-                if d2 < 1 then
-                    local i = y * W + x
-                    hm[i] = hm[i] + h * (1 - d2)
-                end
-            end
+        bumps[#bumps + 1] = { cx, cy, r, h }
+    end
+    local hm = Vox.bumpField(W, D, bumps)
+    -- west-to-east tilt. Everything sits one higher than the old inline
+    -- fill (which started at z=1 over an empty z=0): fromHeightmap fills
+    -- from z=0, so +1 here keeps every column top exactly where it was.
+    for y = 1, D do
+        local row = hm[y]
+        for x = 1, W do
+            row[x] = row[x] + 10 - 7 * ((x - 1) / (W - 1))
         end
     end
     -- flat start and goal pads
     for x = 4, 12 do
-        for y = D // 2 - 4, D // 2 + 4 do hm[y * W + x] = 9 end
+        for y = D // 2 - 4, D // 2 + 4 do hm[y + 1][x + 1] = 10 end
     end
     for x = 83, 91 do
-        for y = D // 2 - 5, D // 2 + 5 do hm[y * W + x] = 2 end
+        for y = D // 2 - 5, D // 2 + 5 do hm[y + 1][x + 1] = 3 end
     end
-    for x = 0, W - 1 do
-        for y = 0, D - 1 do
-            local hh = math.floor(Util.clamp(hm[y * W + x], 1, Vox.H - 4))
-            for z = 1, hh do
-                local m = 2
-                if z == hh then
-                    m = hh >= 7 and 3 or 2
-                    if x >= 83 and x <= 91 and math.abs(y - D // 2) <= 5 then
-                        m = PAD
-                    end
-                end
-                Vox.set(x, y, z, m)
-            end
+    Vox.fromHeightmap(hm, { mat = 2, capMat = 3, capMin = 8, hmin = 2, hmax = 13 })
+    -- the goal pad reads white
+    for x = 83, 91 do
+        for y = D // 2 - 5, D // 2 + 5 do
+            Vox.set(x, y, Vox.heightAt(x, y) - 1, PAD)
         end
     end
     -- goo pools mid-course
@@ -108,33 +99,34 @@ local function beginCourse()
     Game.parts = {}
     resetBall()
     State.timer = Config.COURSE_T
-    State.phase = "banner"
-    State.phaseT = Config.BANNER_T
+    Kit.setMode("play", Config.BANNER_T)
     State.banner = "COURSE " .. State.course
 end
 
 function Game.startGame()
     State.reset()
-    State.mode = "play"
+    Music.set(TRACK)
     beginCourse()
 end
 
 function Game.init()
+    Kit.loadBest()
     Game.startGame()
-    State.mode = "title"
+    Kit.setMode("title")
 end
 
 local function gameOver(reason)
-    State.mode = "over"
+    Kit.setMode("over", 1.2)
     State.reason = reason
-    State.phaseT = 1.2
+    State.newBest = Kit.saveBest(State.score)
+    Music.stop()
     Harness.count("gameovers")
 end
 
 local function loseMarble()
     local b = Game.ball
     for _ = 1, 8 do Kit.spawnPart(Game.parts, b.x, b.y, b.z + 1, 4) end
-    snd.die:playNote(80, 0.5, 0.3)
+    Snd.play("saw", 80, 0.3, 0.5)
     State.marbles = State.marbles - 1
     Harness.count("deaths")
     if State.marbles <= 0 then
@@ -146,8 +138,8 @@ end
 
 local function courseClear()
     State.score = State.score + 25 + math.ceil(State.timer) * 2
-    snd.goal:playNote(1047, 0.3, 0.1)
-    Util.after(0.1, function() snd.goal:playNote(1568, 0.3, 0.15) end)
+    Snd.play("square", 1047, 0.1, 0.3)
+    Util.after(0.1, function() Snd.play("square", 1568, 0.15, 0.3) end)
     Harness.count("courses")
     State.course = State.course + 1
     beginCourse()
@@ -166,23 +158,19 @@ local function autoplay(dt, inp)
 end
 
 function Game.update(dt)
+    Music.update(dt)
     local inp = Input.state
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         if inp.confirm then Game.startGame() end
         return
     end
-    if State.mode == "over" then
-        State.phaseT = math.max(0, State.phaseT - dt)
+    if Kit.mode == "over" then
         Kit.updateParts(Game.parts, dt)
-        if State.phaseT <= 0 and inp.confirm then Game.startGame() end
+        if Kit.modeT <= 0 and inp.confirm then Game.startGame() end
         return
     end
     Kit.updateParts(Game.parts, dt)
-    if State.phase == "banner" then
-        State.phaseT = State.phaseT - dt
-        if State.phaseT <= 0 then State.phase = "run" end
-        return
-    end
+    if Kit.modeT > 0 then return end -- course banner
     if Harness.enabled then autoplay(dt, inp) end
     local b = Game.ball
     b.charge = math.min(1, b.charge + (inp.charge or 0))
@@ -207,7 +195,7 @@ function Game.update(dt)
         local by = sp > 0.5 and b.vy / d or 0
         b.vx = b.vx + bx * Config.BOOST * b.charge
         b.vy = b.vy + by * Config.BOOST * b.charge
-        snd.boost:playNote(440 + b.charge * 440, 0.3, 0.1)
+        Snd.play("square", 440 + b.charge * 440, 0.1, 0.3)
         Harness.count("boosts")
         b.charge = 0
     end
@@ -215,14 +203,14 @@ function Game.update(dt)
     local nx = b.x + b.vx * dt
     if hAt(nx, b.y) - b.z > 1.5 then
         b.vx = -b.vx * Config.BOUNCE
-        snd.bounce:playNote(220, 0.2, 0.05)
+        Snd.play("tri", 220, 0.05, 0.2)
     else
         b.x = Util.clamp(nx, 1, Vox.W - 2)
     end
     local ny = b.y + b.vy * dt
     if hAt(b.x, ny) - b.z > 1.5 then
         b.vy = -b.vy * Config.BOUNCE
-        snd.bounce:playNote(220, 0.2, 0.05)
+        Snd.play("tri", 220, 0.05, 0.2)
     else
         b.y = Util.clamp(ny, 1, Vox.D - 2)
     end

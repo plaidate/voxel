@@ -1,7 +1,7 @@
--- Bulwark: game state. mode is "title", "play" or "over"; phase cycles
--- "banner" -> "build" -> "banner" -> "siege" -> ...
+-- Bulwark: game state. Kit.mode is "title", "play" or "over"; phase
+-- cycles "banner" -> "build" -> "banner" -> "siege" -> ...
 
-State = { mode = "title" }
+State = {}
 
 function State.reset()
     State.score = 0
@@ -16,6 +16,7 @@ function State.reset()
     State.pieceIdx, State.pieceRot = 1, 0
     State.reason = ""
     State.won = false
+    State.newBest = false
 end
 
 State.reset()

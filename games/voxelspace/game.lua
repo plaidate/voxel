@@ -6,6 +6,13 @@
 Game = {}
 Map = { cells = nil }
 
+-- wide-open drone: slow root/fifth swells far below, airy glints, no hat
+local TRACK = {
+    bpm = 60,
+    bass = { 36, 0, 0, 0, 0, 0, 0, 0, 43, 0, 0, 0, 0, 0, 0, 0 },
+    lead = { 0, 0, 0, 0, 60, 0, 0, 0, 0, 0, 67, 0, 0, 0, 64, 0 },
+}
+
 local floor, random = math.floor, math.random
 local SIZE = 256
 
@@ -112,14 +119,17 @@ end
 function Game.init()
     State.reset()
     Game.genMap(State.seed)
+    Music.set(TRACK)
 end
 
 function Game.update(dt)
+    Music.update(dt)
     local s = Input.state
 
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         if s.confirm then
-            State.mode = "fly"
+            Kit.setMode("fly")
+            Snd.play("tri", 523, 0.15, 0.2)
             Harness.count("flights")
         end
         return
@@ -128,6 +138,7 @@ function Game.update(dt)
     if s.regen then
         State.seed = State.seed + 1
         Game.genMap(State.seed)
+        Snd.play("square", 660, 0.08, 0.2)
         Harness.count("regens")
     end
 

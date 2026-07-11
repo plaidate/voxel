@@ -1,7 +1,7 @@
--- Voxelspace: state. mode is "title" or "fly"; the terrain itself lives
--- in Map (game.lua).
+-- Voxelspace: state. The mode lives in Kit.mode ("title" or "fly"); the
+-- terrain itself lives in Map (game.lua).
 
-State = { mode = "title" }
+State = {}
 
 function State.reset()
     State.x, State.y = 128, 128

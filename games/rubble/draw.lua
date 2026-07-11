@@ -12,16 +12,18 @@ local function drawPlayer()
     if p.inv > 0 and math.floor(p.inv * 15) % 2 == 0 then
         return -- hit blink
     end
-    Kit.shadow(p.x, p.y, 1.2)
+    Kit.shadow(p.x, p.y, 1.2, p.z)
     VoxModel.draw(Game.playerModel, p.x, p.y, p.z)
     -- gun barrel voxel in the aim direction
     local ca, sa = math.cos(p.aim), math.sin(p.aim)
     Vox.drawBlock(p.x + ca * 2 - 0.5, p.y + sa * 2, p.z + 1.5, 4)
     Vox.occlude(p.x - 2.5, p.x + 2.5, p.y, p.z, p.z + 4.5)
+    -- ghost silhouette where pillars and walls hide the digger
+    VoxModel.drawGhost(Game.playerModel, p.x, p.y, p.z)
 end
 
 local function drawEnemy(e)
-    Kit.shadow(e.x, e.y, 1)
+    Kit.shadow(e.x, e.y, 1, e.z)
     VoxModel.draw(Game.grubModel, e.x, e.y, e.z)
     Vox.occlude(e.x - 1.5, e.x + 1.5, e.y, e.z, e.z + 2)
 end
@@ -82,25 +84,27 @@ local function drawHud()
 end
 
 local function drawTitle()
-    Kit.panel(50, 48, 300, 130)
+    Kit.panel(50, 48, 300, 148)
     Kit.bigCentered("RUBBLE", 56, 3)
     Kit.centered("waves of grubs - carve the arena", 118)
     Kit.centered("d-pad move / crank aim / Ⓑ jump", 136)
-    Kit.centered("press Ⓐ to start", 156)
+    Kit.centered("BEST " .. Kit.best, 154)
+    Kit.centered("press Ⓐ to start", 174)
 end
 
 local function drawDead()
-    Kit.panel(78, 70, 244, 86)
+    Kit.panel(78, 70, 244, 104)
     Kit.bigCentered("WRECKED", 80, 2)
     Kit.centered("score " .. State.score .. " / wave " .. State.wave, 116)
-    Kit.centered("Ⓐ again", 134)
+    Kit.centered(State.newBest and "NEW BEST" or ("BEST " .. Kit.best), 134)
+    Kit.centered("Ⓐ again", 152)
 end
 
 function Draw.frame()
     drawScene()
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         drawTitle()
-    elseif State.mode == "dead" then
+    elseif Kit.mode == "dead" then
         drawDead()
         Kit.text("SCORE " .. State.score, 8, 3)
     else

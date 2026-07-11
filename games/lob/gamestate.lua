@@ -1,7 +1,7 @@
--- Lob: match state. mode is "title", "play" or "over"; phase is the
+-- Lob: match state. Kit.mode is "title", "play" or "over"; phase is the
 -- turn machine: "banner" -> "aim" -> "flight" -> "resolve" -> ...
 
-State = { mode = "title" }
+State = {}
 
 function State.reset()
     State.youWins, State.foeWins = 0, 0
@@ -13,6 +13,7 @@ function State.reset()
     State.wind = 0
     State.banner = ""
     State.youWon = false
+    State.newBest = false
 end
 
 State.reset()

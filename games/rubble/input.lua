@@ -10,7 +10,7 @@ local ap = { frame = 0, dirT = 0, tx = Vox.W / 2, ty = Vox.D / 2 }
 
 local function autopilot(s)
     ap.frame = ap.frame + 1
-    s.confirm = State.mode ~= "play" and ap.frame % 30 == 0
+    s.confirm = Kit.mode ~= "play" and ap.frame % 30 == 0
     -- cease fire from wave 4 so the grubs win and the death path gets tested
     s.fire = State.wave < 4
     s.jump = math.random() < 0.01

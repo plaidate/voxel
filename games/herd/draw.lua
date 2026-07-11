@@ -6,9 +6,10 @@ local gfx = playdate.graphics
 Draw = {}
 
 local function drawSheep(c)
-    Kit.shadow(c.x, c.y, 1)
+    Kit.shadow(c.x, c.y, 1, c.z)
     VoxModel.draw(Game.sheepModel, c.x, c.y, c.z)
     Vox.occlude(c.x - 1.5, c.x + 1.5, c.y, c.z, c.z + 2)
+    VoxModel.drawGhost(Game.sheepModel, c.x, c.y, c.z)
 end
 
 local function drawScene()
@@ -51,10 +52,10 @@ local function drawHud()
     gfx.drawRect(256, 226, 102, 8)
     local f = (State.rate - Config.RATE_MIN) / (Config.RATE_MAX - Config.RATE_MIN)
     gfx.fillRect(257, 227, math.floor(f * 100), 6)
-    if State.phase == "run" and not Harness.enabled then
+    if Kit.modeT <= 0 and not Harness.enabled then
         drawCursor()
     end
-    if State.phase == "banner" then
+    if Kit.modeT > 0 then
         Kit.panel(110, 100, 180, 26)
         Kit.centered(State.banner, 105)
     end
@@ -62,21 +63,23 @@ end
 
 -- custom title layout (predates Kit.title's spacing; kept pixel-identical)
 local function drawTitle()
-    Kit.panel(46, 42, 308, 146)
+    Kit.panel(46, 42, 308, 162)
     Kit.bigCentered("HERD", 50, 3)
     Kit.centered("dig and blast a path - get the flock home", 112)
     Kit.centered("d-pad cursor / Ⓐ dig / Ⓑ blast", 130)
     Kit.centered("crank sets the release rate", 146)
-    Kit.centered("press Ⓐ to start", 166)
+    Kit.centered("BEST " .. Kit.best, 164)
+    Kit.centered("press Ⓐ to start", 182)
 end
 
 function Draw.frame()
     drawScene()
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         drawTitle()
-    elseif State.mode == "over" then
+    elseif Kit.mode == "over" then
         Kit.over("FLOCK LOST", {
             "level " .. State.level .. " / score " .. State.score,
+            State.newBest and "NEW BEST" or ("BEST " .. Kit.best),
             "Ⓐ again",
         })
     else

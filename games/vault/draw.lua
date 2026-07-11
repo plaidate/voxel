@@ -7,7 +7,7 @@ Draw = {}
 local function drawPlayer()
     local p = Game.player
     if p.inv > 0 and math.floor(p.inv * 15) % 2 == 0 then return end
-    Kit.shadow(p.x, p.y, 1.2)
+    Kit.shadow(p.x, p.y, 1.2, p.z)
     VoxModel.draw(Game.playerModel, p.x, p.y, p.z)
     local ca, sa = math.cos(p.az), math.sin(p.az)
     if (p.swingT or 0) > 0 then
@@ -21,12 +21,15 @@ local function drawPlayer()
         Vox.drawBlock(p.x + ca * 2 - 0.5, p.y + sa * 2, p.z + 1.5, 1)
     end
     Vox.occlude(p.x - 3, p.x + 3, p.y, p.z, p.z + 4)
+    -- walls occlude: keep a see-through silhouette behind them
+    VoxModel.drawGhost(Game.playerModel, p.x, p.y, p.z)
 end
 
 local function drawGrub(g)
-    Kit.shadow(g.x, g.y, 1)
+    Kit.shadow(g.x, g.y, 1, g.z)
     VoxModel.draw(Game.grubModel, g.x, g.y, g.z)
     Vox.occlude(g.x - 1.5, g.x + 1.5, g.y, g.z, g.z + 2)
+    VoxModel.drawGhost(Game.grubModel, g.x, g.y, g.z)
 end
 
 local function drawItem(it)
@@ -64,7 +67,7 @@ function Draw.frame()
         list[#list + 1] = { y = q.y, fn = Kit.drawPart, arg = q }
     end
     Kit.drawSorted(list)
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         Kit.title("VAULT", {
             "find the idol - five rooms down",
             "d-pad move / crank aim / Ⓐ sword+leap / Ⓑ bomb",
@@ -74,7 +77,7 @@ function Draw.frame()
         })
         return
     end
-    if State.mode == "over" then
+    if Kit.mode == "over" then
         Kit.over(State.reason, {
             State.won and "the vault is yours" or ("room " .. State.room),
             "Ⓐ again",
@@ -94,7 +97,7 @@ function Draw.frame()
             gfx.drawRect(x, 5, 8, 8)
         end
     end
-    if State.phase == "banner" then
+    if Kit.modeT > 0 then
         Kit.panel(120, 100, 160, 26)
         Kit.centered(State.banner, 105)
     end

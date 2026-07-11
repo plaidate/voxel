@@ -12,7 +12,7 @@ function Input.poll()
     if Harness.enabled then
         -- autopilot: lazy S-curves, cycling climb, periodic boost/reroll
         apFrame = apFrame + 1
-        s.confirm = State.mode == "title" and apFrame % 30 == 0
+        s.confirm = Kit.mode == "title" and apFrame % 30 == 0
         s.crank = 0
         s.dturn = math.sin(apFrame * 0.008)
         s.climb = (apFrame // 240) % 3 - 1

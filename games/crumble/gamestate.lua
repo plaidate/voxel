@@ -1,6 +1,7 @@
--- Crumble: run state. mode is "title", "play" or "dead".
+-- Crumble: run state. The mode lives in Kit.mode ("title", "play" or
+-- "dead"); Kit.modeT gates the restart on the death screen.
 
-State = { mode = "title" }
+State = {}
 
 function State.reset()
     State.score = 0
@@ -9,7 +10,7 @@ function State.reset()
     State.slimeLevel = 0
     State.riseIn = Config.SLIME_T0
     State.riseInterval = Config.SLIME_T0
-    State.shake = 0
+    State.newBest = false
 end
 
 State.reset()

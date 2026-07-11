@@ -2,18 +2,18 @@
 -- central ridge; shells fly a 45-degree parabola bent by per-turn wind
 -- and carve craters. The foe's aim solver brackets tighter every shot.
 
-local snd = {
-    fire = playdate.sound.synth.new(playdate.sound.kWaveTriangle),
-    boom = playdate.sound.synth.new(playdate.sound.kWaveNoise),
-    hit = playdate.sound.synth.new(playdate.sound.kWaveSawtooth),
-    turn = playdate.sound.synth.new(playdate.sound.kWaveSquare),
-}
-
 Game = {
     you = nil,
     foe = nil,
     shot = nil,
     parts = {},
+}
+
+-- lazy pastoral loop: soft C-G bass ambling under sparse major-scale tones
+local TRACK = {
+    bpm = 72,
+    bass = { 36, 0, 0, 0, 43, 0, 0, 0, 41, 0, 0, 0, 43, 0, 0, 0 },
+    lead = { 0, 0, 72, 0, 0, 0, 76, 0, 0, 0, 79, 0, 76, 0, 0, 0 },
 }
 
 Game.playerModel = VoxModel.fromLayers({
@@ -39,49 +39,28 @@ end
 function Game.buildWorld()
     Vox.clear()
     local W, D = Vox.W, Vox.D
-    local hmap = {}
-    for i = 0, W * D - 1 do hmap[i] = 1.5 end
-    local function bump(cx, cy, r, h)
-        local r2 = r * r
-        for x = math.max(0, cx - r), math.min(W - 1, cx + r) do
-            for y = math.max(0, cy - r), math.min(D - 1, cy + r) do
-                local d2 = ((x - cx) ^ 2 + (y - cy) ^ 2) / r2
-                if d2 < 1 then
-                    local i = y * W + x
-                    hmap[i] = hmap[i] + h * (1 - d2)
-                end
-            end
-        end
-    end
+    local bumps = { base = 1.5 }
     -- rolling hills
     for _ = 1, 10 do
-        bump(math.random(6, W - 7), math.random(5, D - 6),
-            math.random(6, 14), math.random(1, 4) + math.random())
+        bumps[#bumps + 1] = { math.random(6, W - 7), math.random(5, D - 6),
+            math.random(6, 14), math.random(1, 4) + math.random() }
     end
     -- central ridge blocks the flat shot and forces real lobs
     for _ = 1, 4 do
-        bump(W // 2 + math.random(-6, 6), math.random(8, D - 9),
-            math.random(5, 9), math.random(3, 6))
+        bumps[#bumps + 1] = { W // 2 + math.random(-6, 6), math.random(8, D - 9),
+            math.random(5, 9), math.random(3, 6) }
     end
+    local hm = Vox.bumpField(W, D, bumps)
     -- flat firing pads
     for _, p in ipairs({ { 12, D // 2 }, { W - 13, D // 2 } }) do
         for x = p[1] - 4, p[1] + 4 do
             for y = p[2] - 4, p[2] + 4 do
-                hmap[y * W + x] = 2
+                hm[y + 1][x + 1] = 2
             end
         end
     end
-    for x = 0, W - 1 do
-        for y = 0, D - 1 do
-            local hh = math.floor(Util.clamp(hmap[y * W + x], 1, Vox.H - 3))
-            -- only high ground gets bright caps so the white unit stays
-            -- readable on the low hills
-            local cap = hh >= 6 and 3 or 2
-            for z = 0, hh - 1 do
-                Vox.set(x, y, z, z == hh - 1 and cap or 2)
-            end
-        end
-    end
+    -- defaults are lob's exact rules: mat 2, bright caps only from height 6
+    Vox.fromHeightmap(hm)
     Vox.buildBG()
 end
 
@@ -120,25 +99,15 @@ end
 
 function Game.startMatch()
     State.reset()
-    State.mode = "play"
+    Kit.setMode("play")
+    Music.set(TRACK)
     Game.startRound()
 end
 
 function Game.init()
+    Kit.loadBest()
     Game.startMatch()
-    State.mode = "title"
-end
-
-function Game.spawnPart(x, y, z, m)
-    if #Game.parts > 40 then return end
-    Game.parts[#Game.parts + 1] = {
-        x = x, y = y, z = z,
-        vx = (math.random() - 0.5) * 14,
-        vy = (math.random() - 0.5) * 14,
-        vz = math.random() * 10 + 4,
-        t = 0.7 + math.random() * 0.4,
-        m = m,
-    }
+    Kit.setMode("title")
 end
 
 -- launch offsets are Lob's; the flight math is the shared core integrator
@@ -155,32 +124,19 @@ local function stepProj(p, dt)
     return VoxProj.step(p, dt, Config.GRAVITY, State.wind)
 end
 
-local function simImpact(u, az, power)
-    local p = launch(u, az, power)
-    for _ = 1, 300 do
-        if stepProj(p, 1 / 30) then break end
-    end
-    return p.x, p.y
-end
-
--- pick the best power for a straight azimuth at the target, then smear
--- both by err (the foe's err shrinks every shot: classic bracketing)
-function Game.solveAim(u, tgt, err)
-    local az = math.atan(tgt.y - u.y, tgt.x - u.x)
-    local bestP, bestMiss = 0.5, math.huge
-    for i = 0, 10 do
-        local pow = i / 10
-        local ix, iy = simImpact(u, az, pow)
-        local miss = (ix - tgt.x) ^ 2 + (iy - tgt.y) ^ 2
-        if miss < bestMiss then bestMiss, bestP = miss, pow end
-    end
-    local function n() return math.random() + math.random() - 1 end
-    return az + n() * err * 0.03, Util.clamp(bestP + n() * err * 0.04, 0, 1)
-end
+-- shared solver opts; err and wind are per-shot (the foe's err shrinks
+-- every shot: classic bracketing). Muzzle matches launch() above.
+local solveOpts = {
+    vmin = Config.VMIN, vmax = Config.VMAX,
+    elevCos = Config.ELEV_COS, elevSin = Config.ELEV_SIN,
+    muzzle = function(o, az)
+        return o.x + math.cos(az) * 2, o.y + math.sin(az) * 2, o.z + 4.5
+    end,
+}
 
 function Game.fire(u)
     Game.shot = launch(u)
-    snd.fire:playNote(131, 0.4, 0.15)
+    Snd.play("tri", 131, 0.15, 0.4)
     Harness.count("shots")
     setPhase("flight", 0)
 end
@@ -188,38 +144,17 @@ end
 local function explode(x, y, z)
     local removed = Vox.carve(x, y, z, Config.CARVE_R)
     Harness.count("carved", #removed)
-    snd.boom:playNote(80, 0.5, 0.3)
-    for _ = 1, math.min(#removed, 10) do
-        local v = removed[math.random(#removed)]
-        Game.spawnPart(v[1], v[2], v[3], v[4])
-    end
-    for _ = 1, 6 do Game.spawnPart(x, y, z, 4) end
+    Snd.play("noise", 80, 0.3, 0.5)
+    Kit.burst(Game.parts, removed, 10)
+    Kit.spawnPart(Game.parts, x, y, z, { m = 4, count = 6, speed = 14, vzMax = 14 })
     for _, u in ipairs({ Game.you, Game.foe }) do
         local d = math.sqrt((u.x - x) ^ 2 + (u.y - y) ^ 2 + (u.z + 2 - z) ^ 2)
         if d < Config.BLAST_R then
             u.hp = math.max(0, u.hp - (d < 2 and 2 or 1))
             u.flash = 1.2
-            snd.hit:playNote(98, 0.4, 0.2)
+            Snd.play("saw", 98, 0.2, 0.4)
             Harness.count("hits")
         end
-    end
-end
-
-local function updateParts(dt)
-    for i = #Game.parts, 1, -1 do
-        local q = Game.parts[i]
-        q.t = q.t - dt
-        q.vz = q.vz - Config.GRAVITY * dt
-        q.x = q.x + q.vx * dt
-        q.y = q.y + q.vy * dt
-        q.z = q.z + q.vz * dt
-        local g = Vox.heightAt(math.floor(q.x), math.floor(q.y))
-        if q.z < g then
-            q.z = g
-            q.vz = -q.vz * 0.4
-            q.vx, q.vy = q.vx * 0.6, q.vy * 0.6
-        end
-        if q.t <= 0 then table.remove(Game.parts, i) end
     end
 end
 
@@ -232,8 +167,11 @@ local function enterAim()
         local you = State.turn == "you"
         local u = you and Game.you or Game.foe
         local tgt = you and Game.foe or Game.you
-        local err = you and Config.AP_ERR or State.aiErr
-        u.az, u.power = Game.solveAim(u, tgt, err)
+        solveOpts.err = you and Config.AP_ERR or State.aiErr
+        solveOpts.wind = State.wind
+        local az, v = VoxProj.solve(u, tgt, solveOpts)
+        u.az = az
+        u.power = (v - Config.VMIN) / (Config.VMAX - Config.VMIN)
         aiPending = { u = u, t = Config.AI_THINK_T }
         if not you then
             State.aiErr = math.max(Config.AI_ERR_MIN, State.aiErr * Config.AI_DECAY)
@@ -253,8 +191,9 @@ local function endResolve()
         Harness.count("rounds")
         if State.youWins >= Config.ROUNDS or State.foeWins >= Config.ROUNDS then
             State.youWon = State.youWins >= Config.ROUNDS
-            State.mode = "over"
-            State.phaseT = 1.2
+            State.newBest = Kit.saveBest(State.youWins)
+            Kit.setMode("over", 1.2)
+            Music.stop()
             Harness.count("matches")
             if State.youWon then Harness.count("matchwins") end
         else
@@ -263,29 +202,29 @@ local function endResolve()
     else
         State.turn = State.turn == "you" and "foe" or "you"
         rollWind()
-        snd.turn:playNote(523, 0.2, 0.06)
+        Snd.play("square", 523, 0.06, 0.2)
         setPhase("banner", Config.BANNER_T,
             State.turn == "you" and "YOUR TURN" or "FOE'S TURN")
     end
 end
 
 function Game.update(dt)
+    Music.update(dt)
     local inp = Input.state
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         if inp.confirm then Game.startMatch() end
         return
     end
-    if State.mode == "over" then
-        State.phaseT = math.max(0, State.phaseT - dt)
-        updateParts(dt)
-        if State.phaseT <= 0 and inp.confirm then Game.startMatch() end
+    if Kit.mode == "over" then
+        Kit.updateParts(Game.parts, dt)
+        if Kit.modeT <= 0 and inp.confirm then Game.startMatch() end
         return
     end
     physZ(Game.you, dt)
     physZ(Game.foe, dt)
     Game.you.flash = math.max(0, Game.you.flash - dt)
     Game.foe.flash = math.max(0, Game.foe.flash - dt)
-    updateParts(dt)
+    Kit.updateParts(Game.parts, dt)
     local ph = State.phase
     if ph == "banner" then
         State.phaseT = State.phaseT - dt
@@ -319,13 +258,10 @@ function Game.update(dt)
         end
     elseif ph == "flight" then
         local s = Game.shot
-        for _ = 1, 4 do
-            if stepProj(s, dt / 4) then
-                explode(s.x, s.y, s.z)
-                Game.shot = nil
-                setPhase("resolve", Config.RESOLVE_T)
-                break
-            end
+        if stepProj(s, dt) then
+            explode(s.x, s.y, s.z)
+            Game.shot = nil
+            setPhase("resolve", Config.RESOLVE_T)
         end
         if Game.shot then
             s.t = s.t - dt

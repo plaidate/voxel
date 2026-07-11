@@ -5,12 +5,12 @@
 -- anchored in the strata: extract them by proximity intact (15) or crack
 -- them with a careless pick (5).
 
-local snd = {
-    dig = playdate.sound.synth.new(playdate.sound.kWaveNoise),
-    rumble = playdate.sound.synth.new(playdate.sound.kWaveNoise),
-    get = playdate.sound.synth.new(playdate.sound.kWaveSquare),
-    hurt = playdate.sound.synth.new(playdate.sound.kWaveSawtooth),
-    clear = playdate.sound.synth.new(playdate.sound.kWaveTriangle),
+-- deep-mine minor: a slow A-minor pulse far below, sparse hollow answers
+local TRACK = {
+    bpm = 84,
+    bass = { 33, 0, 0, 0, 36, 0, 0, 0, 31, 0, 0, 0, 36, 0, 40, 0 },
+    lead = { 0, 0, 57, 0, 0, 0, 60, 0, 0, 0, 55, 0, 64, 0, 0, 0 },
+    hat  = { 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0 },
 }
 
 local FOSSIL = 4
@@ -30,11 +30,7 @@ Game.playerModel = VoxModel.fromLayers({
 
 function Game.buildMound(level)
     Vox.clear()
-    for x = 0, Vox.W - 1 do
-        for y = 0, Vox.D - 1 do
-            Vox.set(x, y, 0, (x % 8 == 0 or y % 8 == 0) and 3 or 2)
-        end
-    end
+    Vox.floorGrid(2, 3, 8, 0)
     -- max-combined domes; strata: dark deep, light surface
     local hm = {}
     for i = 0, Vox.W * Vox.D - 1 do hm[i] = 0 end
@@ -147,26 +143,26 @@ local function beginShift()
         az = -math.pi / 2, inv = 0, digCd = 0,
     }
     State.timer = Config.SHIFT_T
-    State.phase = "banner"
-    State.phaseT = Config.BANNER_T
+    Kit.setMode("play", Config.BANNER_T)
     State.banner = "SHIFT " .. State.level .. " - " .. State.left .. " FOSSILS"
 end
 
 function Game.startGame()
     State.reset()
-    State.mode = "play"
     beginShift()
 end
 
 function Game.init()
+    Kit.loadBest()
+    Music.set(TRACK)
     Game.startGame()
-    State.mode = "title"
+    Kit.setMode("title")
 end
 
 local function gameOver(reason)
-    State.mode = "over"
+    Kit.setMode("over", 1.2)
     State.reason = reason
-    State.phaseT = 1.2
+    Kit.saveBest(State.score)
     Harness.count("gameovers")
 end
 
@@ -175,7 +171,7 @@ local function hurt()
     if p.inv > 0 then return end
     p.inv = Config.IFRAMES
     State.hp = State.hp - 1
-    snd.hurt:playNote(90, 0.5, 0.25)
+    Snd.play("saw", 90, 0.25, 0.5)
     Harness.count("hurt")
     if State.hp <= 0 then gameOver("BURIED") end
 end
@@ -194,13 +190,13 @@ local function collectFossil(f, intact)
     Vox.repaint(x0 - 2, x1 + 2)
     State.score = State.score + (intact and 15 or 5)
     State.left = State.left - 1
-    snd.get:playNote(intact and 1047 or 392, 0.3, 0.08)
+    Snd.play("square", intact and 1047 or 392, 0.08, 0.3)
     for _ = 1, 6 do Kit.spawnPart(Game.parts, f.x, f.y, f.z + 1, 4) end
     Harness.count(intact and "fossils" or "cracked")
     if State.left <= 0 then
         State.score = State.score + 25
         State.level = State.level + 1
-        snd.clear:playNote(784, 0.3, 0.15)
+        Snd.play("tri", 784, 0.15, 0.3)
         Harness.count("clears")
         beginShift()
     end
@@ -216,8 +212,21 @@ local function checkCracked()
                 end
             end
         end
-        if State.mode ~= "play" then return end
+        if Kit.mode ~= "play" then return end
     end
+end
+
+-- is there standing headroom (hr voxels) for the full footprint at z?
+local function footClear(x, y, hw, z, hr)
+    local floor = math.floor
+    for dz = 0, hr - 1 do
+        for cy = floor(y - hw), floor(y + hw) do
+            for cx = floor(x - hw), floor(x + hw) do
+                if Vox.solid(cx, cy, z + dz) then return false end
+            end
+        end
+    end
+    return true
 end
 
 function Game.dig()
@@ -236,24 +245,40 @@ function Game.dig()
         cz = math.max(1, sz - 1)
     end
     local removed = Vox.carve(tx, ty, cz, Config.DIG_R)
-    snd.dig:playNote(180, 0.3, 0.09)
+    Snd.play("noise", 180, 0.09, 0.3)
     Kit.burst(Game.parts, removed, 5)
     Harness.count("digs")
     checkCracked()
-    if State.mode ~= "play" then return end
+    if Kit.mode ~= "play" then return end
     local cx, cy = math.floor(tx + 0.5), math.floor(ty + 0.5)
     local fell, near = settle(cx - 3, cx + 3, cy - 3, cy + 3)
     if fell > 0 then
         Vox.repaint(cx - 4, cx + 4)
         if fell > 6 then
-            snd.rumble:playNote(55, 0.5, 0.3)
+            Snd.play("noise", 55, 0.3, 0.5)
             Harness.count("caveins")
             if near then hurt() end
         end
     end
-    -- buried by the collapse?
+    -- buried by the collapse? Free the player into the nearest air
+    -- pocket ABOVE (first z with footprint headroom, standing on its
+    -- floor via supportAt), tunnels intact — never teleport through
+    -- solid rock to the column top. Only a fully packed column falls
+    -- back to the surface.
     if Vox.solid(math.floor(p.x), math.floor(p.y), math.floor(p.z) + 1) then
-        p.z = VoxPhys.groundAt(p.x, p.y, p.hw)
+        local freed
+        for z = math.floor(p.z), Vox.H - 1 do
+            if footClear(p.x, p.y, p.hw, z, 3) then
+                freed = z
+                break
+            end
+        end
+        if freed then
+            p.z = VoxPhys.supportAt(p.x, p.y, p.hw, freed)
+        else
+            p.z = VoxPhys.groundAt(p.x, p.y, p.hw)
+        end
+        p.vz = 0
         hurt()
     end
 end
@@ -289,23 +314,19 @@ local function autoplay(dt, inp)
 end
 
 function Game.update(dt)
+    Music.update(dt)
     local inp = Input.state
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         if inp.confirm then Game.startGame() end
         return
     end
-    if State.mode == "over" then
-        State.phaseT = math.max(0, State.phaseT - dt)
+    if Kit.mode == "over" then
         Kit.updateParts(Game.parts, dt)
-        if State.phaseT <= 0 and inp.confirm then Game.startGame() end
+        if Kit.modeT <= 0 and inp.confirm then Game.startGame() end
         return
     end
     Kit.updateParts(Game.parts, dt)
-    if State.phase == "banner" then
-        State.phaseT = State.phaseT - dt
-        if State.phaseT <= 0 then State.phase = "run" end
-        return
-    end
+    if Kit.modeT > 0 then return end -- shift banner
     if Harness.enabled then autoplay(dt, inp) end
     local p = Game.player
     p.inv = math.max(0, p.inv - dt)
@@ -321,7 +342,7 @@ function Game.update(dt)
     end
     VoxPhys.physZTun(p, dt, Config.GRAVITY, 3)
     if inp.dig then Game.dig() end
-    if State.mode ~= "play" then return end
+    if Kit.mode ~= "play" then return end
     -- proximity extraction (any cell within reach)
     for _, f in ipairs(Game.fossils) do
         if not f.collected then
@@ -333,7 +354,7 @@ function Game.update(dt)
                     break
                 end
             end
-            if State.mode ~= "play" then return end
+            if Kit.mode ~= "play" then return end
         end
     end
     -- sparkle hints from exposed fossil faces

@@ -6,9 +6,10 @@ Draw = {}
 
 local function drawBall()
     local b = Game.ball
-    Kit.shadow(b.x, b.y, 1)
+    Kit.shadow(b.x, b.y, 1, b.z)
     VoxModel.draw(Game.ballModel, b.x, b.y, b.z)
     Vox.occlude(b.x - 1.5, b.x + 1.5, b.y, b.z, b.z + 2)
+    VoxModel.drawGhost(Game.ballModel, b.x, b.y, b.z)
 end
 
 function Draw.frame()
@@ -21,18 +22,20 @@ function Draw.frame()
         list[#list + 1] = { y = q.y, fn = Kit.drawPart, arg = q }
     end
     Kit.drawSorted(list)
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         Kit.title("MARBLE", {
             "roll west pad to the white east pad",
             "d-pad steer / crank winds boost / Ⓐ burst",
             "goo eats marbles - crests catch air",
+            "BEST " .. Kit.best,
             "press Ⓐ to start",
         })
         return
     end
-    if State.mode == "over" then
+    if Kit.mode == "over" then
         Kit.over(State.reason, {
             "course " .. State.course .. " / score " .. State.score,
+            State.newBest and "NEW BEST" or ("BEST " .. Kit.best),
             "Ⓐ again",
         })
         return
@@ -55,7 +58,7 @@ function Draw.frame()
     gfx.setColor(gfx.kColorWhite)
     gfx.drawRect(262, 226, 96, 8)
     gfx.fillRect(263, 227, math.floor(b.charge * 94), 6)
-    if State.phase == "banner" then
+    if Kit.modeT > 0 then
         Kit.panel(120, 100, 160, 26)
         Kit.centered(State.banner, 105)
     end

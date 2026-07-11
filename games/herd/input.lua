@@ -18,7 +18,7 @@ function Input.poll()
     if Harness.enabled then
         apFrame = apFrame + 1
         s.mvx, s.mvy, s.dig, s.blast, s.rate = 0, 0, false, false, nil
-        s.confirm = State.mode ~= "play" and apFrame % 30 == 0
+        s.confirm = Kit.mode ~= "play" and apFrame % 30 == 0
         return
     end
     local pd = playdate

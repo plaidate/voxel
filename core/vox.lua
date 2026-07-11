@@ -14,6 +14,9 @@
 
 local gfx = playdate.graphics
 
+-- W/D/H/S/TY/TZ are load-time constants: the module captures them in
+-- locals below, so reassigning the table fields does nothing. Do not
+-- reassign them.
 Vox = {
     W = 96, D = 64, H = 16,
     S = 4, TY = 2, TZ = 4,
@@ -91,6 +94,93 @@ function Vox.heightAt(x, y)
     return 0
 end
 
+-- top of the column: standing height (as heightAt) plus the material of
+-- the top voxel (nil on an empty column) — the "what am I standing on"
+-- probe for goo, ice, pads and the like
+function Vox.surfaceAt(x, y)
+    local h = Vox.heightAt(x, y)
+    return h, Vox.get(x, y, h - 1)
+end
+
+-- ---- terrain authoring helpers -----------------------------------------
+-- The package's palette rules in reusable form: mid-gray (2) ground, a
+-- bright cap course (3) only where it must read as high ground, dark (1)
+-- etch lines so white/black actors pop.
+
+-- one column: fill z = 1..h with mat, top course gets capMat (default 3)
+function Vox.column(x, y, h, mat, capMat)
+    capMat = capMat or 3
+    for z = 1, h do
+        Vox.set(x, y, z, z == h and capMat or mat)
+    end
+end
+
+-- etched-grid floor: one full course of mat with etchMat lines every step
+-- voxels (default 8) — the standard readable ground plane. z defaults to
+-- 1 (a carvable course above the indestructible z=0 floor); pass z = 0
+-- for a bare Rubble-style floor.
+function Vox.floorGrid(mat, etchMat, step, z)
+    step = step or 8
+    z = z or 1
+    for y = 0, D - 1 do
+        for x = 0, W - 1 do
+            Vox.set(x, y, z, (x % step == 0 or y % step == 0) and etchMat or mat)
+        end
+    end
+end
+
+-- heightfield -> columns. hm[y][x] is 1-indexed (hm[1][1] = world 0,0);
+-- heights are clamped to [opts.hmin or 1, opts.hmax or H-3] and floored,
+-- then each column fills z = 0..h-1 with opts.mat (default 2). The cap
+-- rule: columns at least opts.capMin (default 6) high get an opts.capMat
+-- (default 3) top course, so only true high ground reads bright.
+function Vox.fromHeightmap(hm, opts)
+    opts = opts or {}
+    local mat = opts.mat or 2
+    local capMat = opts.capMat or 3
+    local capMin = opts.capMin or 6
+    local hmin = opts.hmin or 1
+    local hmax = opts.hmax or H - 3
+    for y = 0, D - 1 do
+        local row = hm[y + 1]
+        for x = 0, W - 1 do
+            local hh = floor(Util.clamp(row[x + 1], hmin, hmax))
+            local cap = hh >= capMin and capMat or mat
+            for z = 0, hh - 1 do
+                Vox.set(x, y, z, z == hh - 1 and cap or mat)
+            end
+        end
+    end
+end
+
+-- radial-bump heightfield: a w x d table hm[y][x] (1-indexed, for
+-- Vox.fromHeightmap) starting at bumps.base (default 0). Each bump
+-- { cx, cy, r, h } (world coords) adds a smooth h * (1 - d2/r2) mound;
+-- negative h digs a hollow.
+function Vox.bumpField(w, d, bumps)
+    local hm = {}
+    local base = bumps.base or 0
+    for y = 1, d do
+        local row = {}
+        for x = 1, w do row[x] = base end
+        hm[y] = row
+    end
+    for _, b in ipairs(bumps) do
+        local cx, cy, r, h = b[1], b[2], b[3], b[4]
+        local r2 = r * r
+        for x = math.max(0, cx - r), math.min(w - 1, cx + r) do
+            for y = math.max(0, cy - r), math.min(d - 1, cy + r) do
+                local d2 = ((x - cx) ^ 2 + (y - cy) ^ 2) / r2
+                if d2 < 1 then
+                    local row = hm[y + 1]
+                    row[x + 1] = row[x + 1] + h * (1 - d2)
+                end
+            end
+        end
+    end
+    return hm
+end
+
 -- one voxel block drawn directly to the current context (floats fine)
 function Vox.drawBlock(px, py, pz, m)
     local sx = floor(Vox.OX + px * S + 0.5)
@@ -139,9 +229,12 @@ function Vox.renderStrip(x0, x1)
     gfx.clearClipRect()
 end
 
--- build (or rebuild) the full background image
+-- build (or rebuild) the full background image; the 400x240 image is
+-- allocated once and repainted in place on later rebuilds
 function Vox.buildBG()
-    Vox.bg = gfx.image.new(400, 240, gfx.kColorBlack)
+    if not Vox.bg then
+        Vox.bg = gfx.image.new(400, 240, gfx.kColorBlack)
+    end
     gfx.pushContext(Vox.bg)
     Vox.renderStrip(0, W - 1)
     gfx.popContext()

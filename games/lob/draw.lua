@@ -10,9 +10,11 @@ local function drawUnit(u)
     if u.flash > 0 and math.floor(u.flash * 15) % 2 == 0 then
         return
     end
-    Kit.shadow(u.x, u.y, 1.2)
+    Kit.shadow(u.x, u.y, 1.2, u.z)
     VoxModel.draw(u.model, u.x, u.y, u.z)
     Vox.occlude(u.x - 2, u.x + 2, u.y, u.z, u.z + 4)
+    -- ghost silhouette where the central ridge hides a unit
+    VoxModel.drawGhost(u.model, u.x, u.y, u.z)
 end
 
 local function drawShot(s)
@@ -97,25 +99,27 @@ local function drawHud()
 end
 
 local function drawTitle()
-    Kit.panel(50, 48, 300, 130)
+    Kit.panel(50, 48, 300, 148)
     Kit.bigCentered("LOB", 56, 3)
     Kit.centered("artillery duel - mind the wind", 118)
     Kit.centered("crank aim / hold Ⓐ, release to fire", 136)
-    Kit.centered("press Ⓐ to start", 156)
+    Kit.centered("BEST " .. Kit.best, 154)
+    Kit.centered("press Ⓐ to start", 174)
 end
 
 local function drawOver()
-    Kit.panel(78, 70, 244, 86)
+    Kit.panel(78, 70, 244, 104)
     Kit.bigCentered(State.youWon and "VICTORY" or "DEFEAT", 80, 2)
     Kit.centered("rounds " .. State.youWins .. " - " .. State.foeWins, 116)
-    Kit.centered("Ⓐ again", 134)
+    Kit.centered(State.newBest and "NEW BEST" or ("BEST " .. Kit.best), 134)
+    Kit.centered("Ⓐ again", 152)
 end
 
 function Draw.frame()
     drawScene()
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         drawTitle()
-    elseif State.mode == "over" then
+    elseif Kit.mode == "over" then
         drawOver()
     else
         drawHud()

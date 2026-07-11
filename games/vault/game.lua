@@ -3,14 +3,12 @@
 -- aims the sword; ledges and parapets are jumpable; goo burns. Session
 -- state persists per room and mirrors to the datastore for continues.
 
-local snd = {
-    swing = playdate.sound.synth.new(playdate.sound.kWaveSquare),
-    smash = playdate.sound.synth.new(playdate.sound.kWaveNoise),
-    boom = playdate.sound.synth.new(playdate.sound.kWaveNoise),
-    pick = playdate.sound.synth.new(playdate.sound.kWaveSquare),
-    hurt = playdate.sound.synth.new(playdate.sound.kWaveSawtooth),
-    door = playdate.sound.synth.new(playdate.sound.kWaveTriangle),
-    win = playdate.sound.synth.new(playdate.sound.kWaveTriangle),
+-- sparse dungeon: bare D-minor tolls with long silences, a lone answer
+local TRACK = {
+    bpm = 66,
+    bass = { 38, 0, 0, 0, 0, 0, 0, 0, 41, 0, 0, 0, 0, 0, 36, 0 },
+    lead = { 0, 0, 0, 0, 0, 0, 62, 0, 0, 0, 0, 0, 0, 0, 65, 0 },
+    hat  = { 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0 },
 }
 
 local GOO = 1
@@ -54,16 +52,25 @@ local function roomState(id)
     return rs
 end
 
+-- Room-state sets (rs.grubs / rs.pots) are keyed by STRING indices:
+-- datastore JSON turns sparse integer keys into strings (and contiguous
+-- ones into arrays), so integer-keyed writes silently vanished on
+-- continue, resurrecting killed grubs and smashed pots. Write string
+-- keys; read both forms so old saves still count.
+local function rsMark(set, i)
+    set[tostring(i)] = true
+end
+
+local function rsHas(set, i)
+    return set[tostring(i)] or set[i] or false
+end
+
 function Game.buildRoom(id)
     local def = Rooms[id]
     Game.def = def
     local rs = roomState(id)
     Vox.clear()
-    for x = 0, Vox.W - 1 do
-        for y = 0, Vox.D - 1 do
-            Vox.set(x, y, 0, (x % 8 == 0 or y % 8 == 0) and 3 or 2)
-        end
-    end
+    Vox.floorGrid(2, 3, 8, 0)
     -- goo pools (dark floor)
     for _, g in ipairs(def.goo or {}) do
         for x = g[1] - g[3], g[1] + g[3] do
@@ -89,7 +96,7 @@ function Game.buildRoom(id)
                     end
                 end
                 if not inOpen then
-                    for z = 1, 4 do Vox.set(x, y, z, z == 4 and 3 or 2) end
+                    Vox.column(x, y, 4, 2)
                 end
             end
         end
@@ -100,7 +107,7 @@ function Game.buildRoom(id)
             local d = DOORS[side]
             for x = d.x0, d.x1 do
                 for y = d.y0, d.y1 do
-                    for z = 1, 3 do Vox.set(x, y, z, 4) end
+                    Vox.column(x, y, 3, 4, 4)
                 end
             end
         end
@@ -109,16 +116,15 @@ function Game.buildRoom(id)
     for _, w in ipairs(def.walls or {}) do
         for x = w[1], w[3] do
             for y = w[2], w[4] do
-                for z = 1, w[5] do Vox.set(x, y, z, z == w[5] and 3 or 2) end
+                Vox.column(x, y, w[5], 2)
             end
         end
     end
     -- pots are little voxel columns; runtime list tracks the live ones
     Game.pots = {}
     for i, pt in ipairs(def.pots or {}) do
-        if not rs.pots[i] then
-            Vox.set(pt[1], pt[2], 1, 2)
-            Vox.set(pt[1], pt[2], 2, 3)
+        if not rsHas(rs.pots, i) then
+            Vox.column(pt[1], pt[2], 2, 2)
             Game.pots[#Game.pots + 1] = { i = i, x = pt[1], y = pt[2] }
         end
     end
@@ -134,7 +140,7 @@ function Game.buildRoom(id)
     -- actors and items
     Game.grubs = {}
     for i, g in ipairs(def.grubs or {}) do
-        if not rs.grubs[i] then
+        if not rsHas(rs.grubs, i) then
             Game.grubs[#Game.grubs + 1] = {
                 i = i, x = g[1] + 0.5, y = g[2] + 0.5,
                 z = Vox.heightAt(g[1], g[2]), vz = 0, hw = 1, grounded = true,
@@ -170,8 +176,7 @@ function Game.enterRoom(id, fromSide)
     p.az = p.az or -math.pi / 2
     p.cd, p.inv = 0, p.inv or 0
     p.kbx, p.kby = 0, 0
-    State.phase = "banner"
-    State.phaseT = Config.BANNER_T
+    Kit.setMode("play", Config.BANNER_T)
     State.banner = "ROOM " .. id
     Harness.count("rooms")
     playdate.datastore.write({
@@ -187,26 +192,24 @@ function Game.startGame(continue)
             State.reset()
             State.hp, State.keys, State.bombs = sav.hp, sav.keys, sav.bombs
             State.session = sav.session
-            State.mode = "play"
             Game.enterRoom(sav.room, nil)
             return
         end
     end
     State.reset()
-    State.mode = "play"
     Game.enterRoom("A", nil)
 end
 
 function Game.init()
+    Music.set(TRACK)
     Game.startGame()
-    State.mode = "title"
+    Kit.setMode("title")
 end
 
 local function gameOver(reason, won)
-    State.mode = "over"
+    Kit.setMode("over", 1.2)
     State.reason = reason
     State.won = won or false
-    State.phaseT = 1.2
     if won then
         playdate.datastore.delete("save")
         Harness.count("wins")
@@ -221,23 +224,23 @@ local function hurt(kx, ky)
     p.inv = Config.IFRAMES
     State.hp = State.hp - 1
     p.kbx, p.kby = kx * 24, ky * 24
-    snd.hurt:playNote(90, 0.5, 0.25)
+    Snd.play("saw", 90, 0.25, 0.5)
     Harness.count("hurt")
     if State.hp <= 0 then gameOver("SLAIN") end
 end
 
 local function gooAt(x, y)
-    return Vox.heightAt(math.floor(x), math.floor(y)) == 1
-        and Vox.get(math.floor(x), math.floor(y), 0) == GOO
+    local h, m = Vox.surfaceAt(math.floor(x), math.floor(y))
+    return h == 1 and m == GOO
 end
 
 local function smashPot(idx)
     local pt = Game.pots[idx]
-    roomState(State.room).pots[pt.i] = true
+    rsMark(roomState(State.room).pots, pt.i)
     Vox.set(pt.x, pt.y, 1, nil)
     Vox.set(pt.x, pt.y, 2, nil)
     Vox.repaint(pt.x - 1, pt.x + 1)
-    snd.smash:playNote(160, 0.4, 0.1)
+    Snd.play("noise", 160, 0.1, 0.4)
     for _ = 1, 4 do Kit.spawnPart(Game.parts, pt.x, pt.y, 2, 3) end
     local r = math.random()
     if r < 0.3 then
@@ -254,13 +257,13 @@ local function swing()
     if p.cd > 0 then return end
     p.cd = Config.SWORD_CD
     p.swingT = 0.15
-    snd.swing:playNote(700, 0.25, 0.05)
+    Snd.play("square", 700, 0.05, 0.25)
     local fa, fs = math.cos(p.az), math.sin(p.az)
     for i = #Game.grubs, 1, -1 do
         local g = Game.grubs[i]
         local dx, dy = g.x - p.x, g.y - p.y
         if dx * dx + dy * dy < Config.SWORD_R ^ 2 and dx * fa + dy * fs > 0 then
-            roomState(State.room).grubs[g.i] = true
+            rsMark(roomState(State.room).grubs, g.i)
             for _ = 1, 5 do Kit.spawnPart(Game.parts, g.x, g.y, g.z + 1, 1) end
             table.remove(Game.grubs, i)
             Harness.count("kills")
@@ -273,10 +276,34 @@ local function swing()
     end
 end
 
+-- is a locked door's opening passable now (three consecutive positions
+-- along the span cleared through both wall rows, z 1..3)?
+local function doorBlasted(side)
+    local d = DOORS[side]
+    local horiz = side == "n" or side == "s"
+    local a0, a1 = d.x0, d.x1
+    local b0, b1 = d.y0, d.y1
+    if not horiz then a0, a1, b0, b1 = d.y0, d.y1, d.x0, d.x1 end
+    local run = 0
+    for a = a0, a1 do
+        local clear = true
+        for b = b0, b1 do
+            local x, y = a, b
+            if not horiz then x, y = b, a end
+            for z = 1, 3 do
+                if Vox.get(x, y, z) then clear = false end
+            end
+        end
+        run = clear and run + 1 or 0
+        if run >= 3 then return true end
+    end
+    return false
+end
+
 local function explode(b)
     local removed = Vox.carve(b.x, b.y, b.z + 1, Config.BOMB_R)
     Kit.burst(Game.parts, removed, 8)
-    snd.boom:playNote(70, 0.5, 0.3)
+    Snd.play("noise", 70, 0.3, 0.5)
     Harness.count("bombsused")
     local p = Game.player
     if (p.x - b.x) ^ 2 + (p.y - b.y) ^ 2 < 16 then
@@ -285,7 +312,7 @@ local function explode(b)
     for i = #Game.grubs, 1, -1 do
         local g = Game.grubs[i]
         if (g.x - b.x) ^ 2 + (g.y - b.y) ^ 2 < 20 then
-            roomState(State.room).grubs[g.i] = true
+            rsMark(roomState(State.room).grubs, g.i)
             table.remove(Game.grubs, i)
             Harness.count("kills")
         end
@@ -293,6 +320,15 @@ local function explode(b)
     for i = #Game.pots, 1, -1 do
         local pt = Game.pots[i]
         if (pt.x - b.x) ^ 2 + (pt.y - b.y) ^ 2 < 14 then smashPot(i) end
+    end
+    -- a bombed-open locked door must stay open on re-entry: persist it
+    -- to the room state, exactly like a key unlock
+    local rs = roomState(State.room)
+    for side, locked in pairs(Game.def.locked or {}) do
+        if locked and not rs.doors[side] and doorBlasted(side) then
+            rs.doors[side] = true
+            Harness.count("doors")
+        end
     end
 end
 
@@ -315,7 +351,7 @@ local function tryDoors()
                     end
                 end
                 Vox.repaint(d.x0 - 1, d.x1 + 1)
-                snd.door:playNote(523, 0.3, 0.12)
+                Snd.play("tri", 523, 0.12, 0.3)
                 Harness.count("doors")
             end
         end
@@ -434,24 +470,20 @@ local function autoplay(dt, inp)
 end
 
 function Game.update(dt)
+    Music.update(dt)
     local inp = Input.state
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         if inp.confirm then Game.startGame() end
         if inp.bomb then Game.startGame(true) end
         return
     end
-    if State.mode == "over" then
-        State.phaseT = math.max(0, State.phaseT - dt)
+    if Kit.mode == "over" then
         Kit.updateParts(Game.parts, dt)
-        if State.phaseT <= 0 and inp.confirm then Game.startGame() end
+        if Kit.modeT <= 0 and inp.confirm then Game.startGame() end
         return
     end
     Kit.updateParts(Game.parts, dt)
-    if State.phase == "banner" then
-        State.phaseT = State.phaseT - dt
-        if State.phaseT <= 0 then State.phase = "run" end
-        return
-    end
+    if Kit.modeT > 0 then return end -- room banner
     inp.jump = inp.jump or false
     if Harness.enabled then autoplay(dt, inp) end
     local p = Game.player
@@ -484,11 +516,11 @@ function Game.update(dt)
             table.remove(Game.bombs, i)
         end
     end
-    if State.mode ~= "play" then return end
+    if Kit.mode ~= "play" then return end
     -- goo burns
     if p.grounded and gooAt(p.x, p.y) then
         hurt(-vx * 0.06, -vy * 0.06)
-        if State.mode ~= "play" then return end
+        if Kit.mode ~= "play" then return end
     end
     -- grubs
     for _, g in ipairs(Game.grubs) do
@@ -503,14 +535,14 @@ function Game.update(dt)
         VoxPhys.physZ(g, dt, Config.GRAVITY)
         if d < 2.2 and math.abs(g.z - p.z) < 2 then
             hurt(gx / d, gy / d)
-            if State.mode ~= "play" then return end
+            if Kit.mode ~= "play" then return end
         end
     end
     -- items
     for i = #Game.items, 1, -1 do
         local it = Game.items[i]
         if (it.x - p.x) ^ 2 + (it.y - p.y) ^ 2 < 4 then
-            snd.pick:playNote(1047, 0.3, 0.07)
+            Snd.play("square", 1047, 0.07, 0.3)
             if it.kind == "key" then
                 State.keys = State.keys + 1
                 roomState(State.room).key = true
@@ -531,7 +563,7 @@ function Game.update(dt)
     if Game.def.idol then
         local ix, iy = Game.def.idol[1] + 1, Game.def.idol[2] + 1
         if (p.x - ix) ^ 2 + (p.y - iy) ^ 2 < 12 then
-            snd.win:playNote(784, 0.4, 0.2)
+            Snd.play("tri", 784, 0.2, 0.4)
             gameOver("VICTORY", true)
             return
         end

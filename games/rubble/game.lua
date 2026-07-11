@@ -1,18 +1,18 @@
 -- Rubble: arena, actors and simulation. Waves of grubs converge on the
 -- player; shots and blocked grubs carve the terrain via Vox.carve.
 
-local snd = {
-    shoot = playdate.sound.synth.new(playdate.sound.kWaveSquare),
-    boom = playdate.sound.synth.new(playdate.sound.kWaveNoise),
-    hurt = playdate.sound.synth.new(playdate.sound.kWaveSawtooth),
-    kill = playdate.sound.synth.new(playdate.sound.kWaveTriangle),
-}
-
 Game = {
     player = nil,
     enemies = {},
     shots = {},
     parts = {},
+}
+
+-- sparse rumble: lone sub-bass hits with the occasional noise tick
+local TRACK = {
+    bpm = 84,
+    bass = { 28, 0, 0, 0, 0, 0, 31, 0, 0, 0, 0, 0, 26, 0, 0, 0 },
+    hat = { 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0 },
 }
 
 Game.playerModel = VoxModel.fromLayers({
@@ -32,17 +32,12 @@ local pendingSpawns = 0
 function Game.buildWorld()
     Vox.clear()
     -- mid-gray floor with an etched dark grid so white/black actors pop
-    for x = 0, Vox.W - 1 do
-        for y = 0, Vox.D - 1 do
-            local m = (x % 8 == 0 or y % 8 == 0) and 1 or 2
-            Vox.set(x, y, 0, m)
-        end
-    end
+    Vox.floorGrid(2, 1, 8, 0)
     -- rim walls, 2 thick, 3 high, light capstones
     for x = 0, Vox.W - 1 do
         for y = 0, Vox.D - 1 do
             if x < 2 or x >= Vox.W - 2 or y < 2 or y >= Vox.D - 2 then
-                for z = 1, 3 do Vox.set(x, y, z, z == 3 and 3 or 2) end
+                Vox.column(x, y, 3, 2, 3)
             end
         end
     end
@@ -50,7 +45,7 @@ function Game.buildWorld()
     for _, p in ipairs({ { 18, 14, 7 }, { 18, 46, 6 }, { 46, 29, 8 }, { 74, 14, 6 }, { 74, 46, 7 } }) do
         for x = p[1], p[1] + 3 do
             for y = p[2], p[2] + 3 do
-                for z = 1, p[3] do Vox.set(x, y, z, z == p[3] and 4 or 2) end
+                Vox.column(x, y, p[3], 2, 4)
             end
         end
     end
@@ -70,6 +65,7 @@ function Game.startRun()
     State.reset()
     Game.buildWorld()
     Util.clearPending()
+    Music.set(TRACK)
     Game.player = {
         x = Vox.W / 2, y = Vox.D / 2 + 6, z = 1, vz = 0,
         hw = 1.1, grounded = true,
@@ -82,8 +78,9 @@ function Game.startRun()
 end
 
 function Game.init()
+    Kit.loadBest()
     Game.startRun()
-    State.mode = "title"
+    Kit.setMode("title")
 end
 
 local tryMove = VoxPhys.tryMove
@@ -92,37 +89,22 @@ local function physZ(e, dt)
     VoxPhys.physZ(e, dt, Config.GRAVITY)
 end
 
-function Game.spawnPart(x, y, z, m)
-    if #Game.parts > 40 then return end
-    Game.parts[#Game.parts + 1] = {
-        x = x, y = y, z = z,
-        vx = (math.random() - 0.5) * 14,
-        vy = (math.random() - 0.5) * 14,
-        vz = math.random() * 10 + 4,
-        t = 0.7 + math.random() * 0.4,
-        m = m,
-    }
-end
-
 -- carve a crater and throw debris
 function Game.boom(x, y, z, r)
     local removed = Vox.carve(x, y, z, r)
     if #removed > 0 then
         Harness.count("carved", #removed)
-        snd.boom:playNote(110, 0.4, 0.15)
-        for _ = 1, math.min(#removed, 8) do
-            local v = removed[math.random(#removed)]
-            Game.spawnPart(v[1], v[2], v[3], v[4])
-        end
+        Snd.play("noise", 110, 0.15, 0.4)
+        Kit.burst(Game.parts, removed, 8)
     else
-        snd.boom:playNote(220, 0.2, 0.05)
-        Game.spawnPart(x, y, z, 4)
+        Snd.play("noise", 220, 0.05, 0.2)
+        Kit.spawnPart(Game.parts, x, y, z, { m = 4, speed = 14, vzMax = 14 })
     end
 end
 
 function Game.spawnEnemy()
     pendingSpawns = pendingSpawns - 1
-    if State.mode ~= "play" then return end
+    if Kit.mode ~= "play" then return end
     local x, y
     local side = math.random(4)
     if side == 1 then
@@ -139,16 +121,19 @@ function Game.spawnEnemy()
         hw = 0.9, grounded = true, chew = Config.CHEW_PERIOD,
     }
     Game.enemies[#Game.enemies + 1] = e
-    for _ = 1, 4 do Game.spawnPart(x, y, e.z + 1, 4) end
+    Kit.spawnPart(Game.parts, x, y, e.z + 1, { m = 4, count = 4, speed = 14, vzMax = 14 })
     Harness.count("spawns")
 end
 
 function Game.killEnemy(j)
     local e = table.remove(Game.enemies, j)
     State.score = State.score + 10
-    snd.kill:playNote(392, 0.3, 0.08)
-    Util.after(0.07, function() snd.kill:playNote(196, 0.3, 0.1) end)
-    for _ = 1, 6 do Game.spawnPart(e.x, e.y, e.z + 1, math.random() < 0.5 and 1 or 4) end
+    Snd.play("tri", 392, 0.08, 0.3)
+    Util.after(0.07, function() Snd.play("tri", 196, 0.1, 0.3) end)
+    for _ = 1, 6 do
+        Kit.spawnPart(Game.parts, e.x, e.y, e.z + 1,
+            { m = math.random() < 0.5 and 1 or 4, speed = 14, vzMax = 14 })
+    end
     Harness.count("kills")
 end
 
@@ -159,12 +144,16 @@ function Game.hurtPlayer(nx, ny)
     p.kbx, p.kby = nx * Config.KNOCKBACK, ny * Config.KNOCKBACK
     p.inv = Config.IFRAMES
     State.hp = State.hp - 1
-    snd.hurt:playNote(98, 0.4, 0.2)
+    Snd.play("saw", 98, 0.2, 0.4)
     Harness.count("hurt")
     if State.hp <= 0 then
-        State.mode = "dead"
-        State.t = 0
-        for _ = 1, 12 do Game.spawnPart(p.x, p.y, p.z + 1, math.random(2, 4)) end
+        State.newBest = Kit.saveBest(State.score)
+        Kit.setMode("dead", 1.0)
+        Music.stop()
+        for _ = 1, 12 do
+            Kit.spawnPart(Game.parts, p.x, p.y, p.z + 1,
+                { m = math.random(2, 4), speed = 14, vzMax = 14 })
+        end
         Harness.count("gameovers")
     end
 end
@@ -195,7 +184,7 @@ local function updatePlayer(dt, inp)
             x = p.x + ca * 2.2, y = p.y + sa * 2.2, z = p.z + 1.5,
             dx = ca, dy = sa, d = 0,
         }
-        snd.shoot:playNote(740, 0.25, 0.06)
+        Snd.play("square", 740, 0.06, 0.25)
         Harness.count("shots")
     end
 end
@@ -252,30 +241,12 @@ local function updateEnemies(dt)
             end
         end
         physZ(e, dt)
-        if p.inv == 0 and State.mode == "play" then
+        if p.inv == 0 and Kit.mode == "play" then
             local cx, cy = p.x - e.x, p.y - e.y
             if cx * cx + cy * cy < 4.5 and math.abs(p.z - e.z) < 2 then
                 Game.hurtPlayer(cx, cy)
             end
         end
-    end
-end
-
-local function updateParts(dt)
-    for i = #Game.parts, 1, -1 do
-        local q = Game.parts[i]
-        q.t = q.t - dt
-        q.vz = q.vz - Config.GRAVITY * dt
-        q.x = q.x + q.vx * dt
-        q.y = q.y + q.vy * dt
-        q.z = q.z + q.vz * dt
-        local g = Vox.heightAt(math.floor(q.x), math.floor(q.y))
-        if q.z < g then
-            q.z = g
-            q.vz = -q.vz * 0.4
-            q.vx, q.vy = q.vx * 0.6, q.vy * 0.6
-        end
-        if q.t <= 0 then table.remove(Game.parts, i) end
     end
 end
 
@@ -289,32 +260,33 @@ local function updateWaves()
         for i = 1, n do
             Util.after(0.6 + i * Config.SPAWN_GAP, Game.spawnEnemy)
         end
-        snd.kill:playNote(523, 0.25, 0.09)
-        Util.after(0.1, function() snd.kill:playNote(784, 0.25, 0.12) end)
+        Snd.play("tri", 523, 0.09, 0.25)
+        Util.after(0.1, function() Snd.play("tri", 784, 0.12, 0.25) end)
     end
 end
 
 function Game.update(dt)
+    Music.update(dt)
     local inp = Input.state
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         if inp.confirm then
             Game.startRun()
-            State.mode = "play"
+            Kit.setMode("play")
         end
         return
     end
-    if State.mode == "dead" then
-        State.t = State.t + dt
-        updateParts(dt)
-        if State.t > 1 and inp.confirm then
+    if Kit.mode == "dead" then
+        Kit.updateParts(Game.parts, dt)
+        if Kit.modeT <= 0 and inp.confirm then
             Game.startRun()
-            State.mode = "play"
+            Kit.setMode("play")
         end
         return
     end
+    State.t = State.t + dt -- drives the locator marker's bob
     updatePlayer(dt, inp)
     updateShots(dt)
     updateEnemies(dt)
-    updateParts(dt)
+    Kit.updateParts(Game.parts, dt)
     updateWaves()
 end

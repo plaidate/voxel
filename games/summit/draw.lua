@@ -5,9 +5,10 @@ local gfx = playdate.graphics
 Draw = {}
 
 local function drawActor(e)
-    Kit.shadow(e.x, e.y, 1.2)
+    Kit.shadow(e.x, e.y, 1.2, e.z)
     VoxModel.draw(e.model, e.x, e.y, e.z)
     Vox.occlude(e.x - 2, e.x + 2, e.y, e.z, e.z + 4)
+    VoxModel.drawGhost(e.model, e.x, e.y, e.z)
 end
 
 function Draw.frame()
@@ -23,18 +24,20 @@ function Draw.frame()
         list[#list + 1] = { y = q.y, fn = Kit.drawPart, arg = q }
     end
     Kit.drawSorted(list)
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         Kit.title("SUMMIT", {
             "shove the brutes into the goo",
             "d-pad move / Ⓐ shove / Ⓑ jump terraces",
             "crank winds a spin - full meter, big blast",
+            "BEST " .. Kit.best,
             "press Ⓐ to start",
         })
         return
     end
-    if State.mode == "over" then
+    if Kit.mode == "over" then
         Kit.over(State.reason or "IN THE GOO", {
             "round " .. State.round .. " / score " .. State.score,
+            State.newBest and "NEW BEST" or ("BEST " .. Kit.best),
             "Ⓐ again",
         })
         return
@@ -51,7 +54,7 @@ function Draw.frame()
     if p.charge >= 1 and math.floor(State.erodeIn * 4) % 2 == 0 then
         Kit.text("READY", 362, 222)
     end
-    if State.phase == "banner" then
+    if Kit.modeT > 0 then
         Kit.panel(120, 100, 160, 26)
         Kit.centered(State.banner, 105)
     end

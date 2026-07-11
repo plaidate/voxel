@@ -1,16 +1,15 @@
--- Vault: game state. mode is "title", "play" or "over". session carries
--- the dungeon's per-room state and is mirrored to the datastore so a run
--- can be continued after relaunch.
+-- Vault: game state. The mode lives in Kit.mode ("title", "play" or
+-- "over"); Kit.modeT > 0 is the room banner (in play) or the game-over
+-- input lockout. session carries the dungeon's per-room state and is
+-- mirrored to the datastore so a run can be continued after relaunch.
 
-State = { mode = "title" }
+State = {}
 
 function State.reset()
     State.hp = Config.MAX_HP
     State.keys = 0
     State.bombs = Config.START_BOMBS
     State.room = "A"
-    State.phase = "banner"
-    State.phaseT = 0
     State.banner = ""
     State.reason = ""
     State.won = false

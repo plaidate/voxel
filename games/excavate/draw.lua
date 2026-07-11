@@ -8,11 +8,13 @@ Draw = {}
 local function drawPlayer()
     local p = Game.player
     if p.inv > 0 and math.floor(p.inv * 15) % 2 == 0 then return end
-    Kit.shadow(p.x, p.y, 1.2)
+    Kit.shadow(p.x, p.y, 1.2, p.z)
     VoxModel.draw(Game.playerModel, p.x, p.y, p.z)
     local ca, sa = math.cos(p.az), math.sin(p.az)
     Vox.drawBlock(p.x + ca * 2 - 0.5, p.y + sa * 2, p.z + 1.5, 1)
     Vox.occlude(p.x - 2.5, p.x + 2.5, p.y, p.z, p.z + 4)
+    -- tunneled miner: keep a see-through silhouette where rock covers him
+    VoxModel.drawGhost(Game.playerModel, p.x, p.y, p.z)
 end
 
 function Draw.frame()
@@ -25,18 +27,20 @@ function Draw.frame()
         list[#list + 1] = { y = q.y, fn = Kit.drawPart, arg = q }
     end
     Kit.drawSorted(list)
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         Kit.title("EXCAVATE", {
             "fossils are buried in the mound",
             "d-pad move / crank aim / Ⓐ dig / Ⓑ hop",
             "unsupported rock falls - mind the roof",
+            "BEST " .. Kit.best,
             "press Ⓐ to start",
         })
         return
     end
-    if State.mode == "over" then
+    if Kit.mode == "over" then
         Kit.over(State.reason, {
             "level " .. State.level .. " / score " .. State.score,
+            "BEST " .. Kit.best,
             "Ⓐ again",
         })
         return
@@ -64,7 +68,7 @@ function Draw.frame()
         end
     end
     Kit.text("LEVEL " .. State.level .. "  SCORE " .. State.score, 8, 222)
-    if State.phase == "banner" then
+    if Kit.modeT > 0 then
         Kit.panel(100, 100, 200, 26)
         Kit.centered(State.banner, 105)
     end

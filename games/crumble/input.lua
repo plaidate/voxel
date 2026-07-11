@@ -10,7 +10,7 @@ local ap = { frame = 0, lastX = 0, lastY = 0, moved = 0, win = 0 }
 
 local function autopilot(s)
     ap.frame = ap.frame + 1
-    s.confirm = State.mode ~= "play" and ap.frame % 30 == 0
+    s.confirm = Kit.mode ~= "play" and ap.frame % 30 == 0
     s.charge = 0.04
     s.jump = false
     s.spring = false

@@ -7,9 +7,11 @@ local gfx = playdate.graphics
 Draw = {}
 
 local function drawCat(c)
-    Kit.shadow(c.x, c.y, 1.4)
+    Kit.shadow(c.x, c.y, 1.4, c.z)
     VoxModel.draw(Game.catModel, c.x, c.y, c.z)
     Vox.occlude(c.x - 2, c.x + 2, c.y, c.z, c.z + 3)
+    -- ghost silhouette where walls or crater rims hide a settled catapult
+    VoxModel.drawGhost(Game.catModel, c.x, c.y, c.z)
 end
 
 local function drawShell(s)
@@ -102,26 +104,28 @@ local function drawHud()
 end
 
 local function drawTitle()
-    Kit.panel(46, 42, 308, 146)
+    Kit.panel(46, 42, 308, 164)
     Kit.bigCentered("BULWARK", 50, 3)
     Kit.centered("enclose the keep - survive the siege", 112)
     Kit.centered("build: d-pad move, crank turn, Ⓐ place", 130)
     Kit.centered("siege: crank aim, hold Ⓐ, release to fire", 146)
-    Kit.centered("press Ⓐ to start", 166)
+    Kit.centered("BEST " .. Kit.best, 164)
+    Kit.centered("press Ⓐ to start", 184)
 end
 
 local function drawOver()
-    Kit.panel(78, 70, 244, 86)
+    Kit.panel(78, 70, 244, 104)
     Kit.bigCentered(State.reason, 80, 2)
     Kit.centered("score " .. State.score, 116)
-    Kit.centered("Ⓐ again", 134)
+    Kit.centered(State.newBest and "NEW BEST" or ("BEST " .. Kit.best), 134)
+    Kit.centered("Ⓐ again", 152)
 end
 
 function Draw.frame()
     drawScene()
-    if State.mode == "title" then
+    if Kit.mode == "title" then
         drawTitle()
-    elseif State.mode == "over" then
+    elseif Kit.mode == "over" then
         drawOver()
     else
         drawHud()
